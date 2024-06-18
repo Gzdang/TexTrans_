@@ -1,3 +1,5 @@
+import re
+
 import torch
 import torch.nn.functional as F
 from diffusers.models.attention_processor import Attention
@@ -6,6 +8,18 @@ from diffusers.utils.deprecation_utils import deprecate
 from typing import Optional
 
 from masactrl.utils import attn_adain
+
+
+def set_masactrl_attn(model):
+    attn_processor = model.attn_processors
+    pattern = "(up|mid)\w.*attn1"
+
+    masactrl_processor = MasaProcessor()
+    for k, v in attn_processor.items():
+        if re.match(pattern, k) is not None:
+            attn_processor[k] = masactrl_processor
+
+    model.set_attn_processor(attn_processor)
 
 
 class MasaProcessor:

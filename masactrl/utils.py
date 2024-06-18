@@ -1,10 +1,6 @@
-import re
-
 import numpy as np
 import torch
 from torchvision.transforms.functional import to_pil_image
-
-from masactrl.attn_processor import MasaProcessor
 
 
 def calc_mean_std(feat, dim=-2, eps: float = 1e-5):
@@ -54,15 +50,3 @@ def image_transfer(tar_image, style_image):
     res = to_pil_image(res)
 
     return res
-
-
-def set_masactrl_attn(model):
-    attn_processor = model.attn_processors
-    pattern = "(up|mid)\w.*attn1"
-
-    masactrl_processor = MasaProcessor()
-    for k, v in attn_processor.items():
-        if re.match(pattern, k) is not None:
-            attn_processor[k] = masactrl_processor
-
-    model.set_attn_processor(attn_processor)

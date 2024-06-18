@@ -143,8 +143,8 @@ class MyPipeline(StableDiffusionXLPipeline):
         add_time_ids = add_time_ids.repeat(batch_size, 1)
 
         if guidance_scale > 1.0:
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-            add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
+            prompt_embeds = torch.cat([prompt_embeds, prompt_embeds], dim=0)
+            add_text_embeds = torch.cat([add_text_embeds, add_text_embeds], dim=0)
             add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
 
         prompt_embeds = prompt_embeds.to(DEVICE)
@@ -214,6 +214,9 @@ class MyPipeline(StableDiffusionXLPipeline):
                         for samples_prev, samples_curr in zip(down_block_res_samples, down_block_depth)
                     ]
                     mid_block_res_sample += mid_block_depth
+                
+                down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), torch.zeros_like(t[1]), -0.5*(t[2]), t[3]]) for t in down_block_res_samples]
+                mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), torch.zeros_like(mid_block_res_sample[1]), -0.5*(mid_block_res_sample[2]), mid_block_res_sample[3]])
 
             noise_pred = self.unet(
                 model_inputs,
@@ -224,15 +227,23 @@ class MyPipeline(StableDiffusionXLPipeline):
                 added_cond_kwargs=added_cond_kwargs,
             ).sample
 
+            ref_noise = noise_pred[2:3]
+
             if guidance_scale > 1.0:
                 noise_pred_uncon, noise_pred_con = noise_pred[1:2], noise_pred[-1:]
                 # noise_pred_uncon, noise_pred_con = noise_pred.chunk(2, dim=0)
-                noise_pred = noise_pred_uncon + guidance_scale * (noise_pred_con - noise_pred_uncon)
+                # noise_pred = noise_pred_uncon + guidance_scale * (noise_pred_con - noise_pred_uncon)
+                noise_pred = noise_pred_con
             # compute the previous noise sample x_t -> x_t-1
-            latents, pred_x0 = self.step(noise_pred.repeat(2, 1, 1, 1), t, latents)
+
+            
+            latents, pred_x0 = self.step(torch.cat([ref_noise, noise_pred]), t, latents)
+
+            # latents[1] = feat_adain(latents[1], latents[0])
             # latents, pred_x0 = self.step(noise_pred, t, latents)
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
+            save_image(self.latent2image(pred_x0.to(torch.float32), "pt"), "test.png")
 
         image = self.latent2image(latents.to(torch.float32), return_type="pt")
         if return_intermediates:
@@ -386,7 +397,7 @@ class MyPipeline(StableDiffusionXLPipeline):
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
 
-            # save_image(self.latent2image(pred_x0.to(torch.float32), "pt"), "test.png")
+        save_image(self.latent2image(latents.to(torch.float32), "pt"), "test_.png")
 
         if return_intermediates:
             # return the intermediate laters during inversion
