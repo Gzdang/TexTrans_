@@ -38,6 +38,8 @@ class RenderHandle:
         self.mesh_combination = self.mesh_num * (self.mesh_num - 1)
         self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
         self.azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
+        # self.elev_list = [t*np.pi for t in (1/6, 1/6, 1/6, 5/12, 5/12, 5/12, 5/6, 5/6, 5/6)]
+        # self.azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
         self.camera_list = list(zip(self.elev_list, self.azim_list))
         self.camera_num = len(self.elev_list)
         self.camera_combination = self.camera_num * (self.camera_num - 1)

@@ -2,15 +2,16 @@ import os
 
 import kaolin as kal
 import numpy as np
+import xatlas
 import torch
 import torch.nn as nn
 
+from omegaconf import OmegaConf
 from PIL import Image
-import xatlas
 
 from mesh.mesh import Mesh
 from mesh.render import Render
-from omegaconf import OmegaConf
+from mesh.unet.skip import skip
 
 
 class TexturedMeshModel(nn.Module):
@@ -57,6 +58,23 @@ class TexturedMeshModel(nn.Module):
 
         # 初始化纹理图
         self.texture_map = self.init_textures()
+
+        self.texture_seed = torch.randn(1, 3, texture_resolution, texture_resolution).to(self.device)
+        self.texture_unet = skip(
+            3,
+            3,
+            num_channels_down=[128] * 5,
+            num_channels_up=[128] * 5,
+            num_channels_skip=[128] * 5,
+            filter_size_up=3,
+            filter_size_down=3,
+            upsample_mode="nearest",
+            filter_skip_size=1,
+            need_sigmoid=True,
+            need_bias=True,
+            pad="reflection",
+            act_fun="LeakyReLU",
+        ).to(self.device)
 
         # self.texture_img = self.init_paint()
 
@@ -136,7 +154,10 @@ class TexturedMeshModel(nn.Module):
         raise NotImplementedError
 
     def get_params(self):
-        return [self.texture_img]
+        return self.texture_unet.parameters()
+    
+    def get_texture(self):
+        return self.texture_unet(self.texture_seed)
 
     def render(
         self,
@@ -148,7 +169,7 @@ class TexturedMeshModel(nn.Module):
     ):
         augmented_vertices = self.mesh.vertices
 
-        texture_img = self.texture_map
+        texture_img = self.texture_unet(self.texture_seed)
         render_cache = self.render_cache
 
         images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(
@@ -193,6 +214,8 @@ class TexturedMeshModel(nn.Module):
         return torch.cat(cols, -2)
 
     def render_all(self):
+        # elev_list = [t*np.pi for t in (1/6, 1/6, 1/6, 5/12, 5/12, 5/12, 5/6, 5/6, 5/6)]
+        # azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
         elev_list = [t * np.pi for t in (1 / 4, 1 / 4, 1 / 4, 1 / 2, 1 / 2, 1 / 2, 3 / 4, 3 / 4, 3 / 4)]
         azim_list = [t * np.pi for t in (5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3)]
 

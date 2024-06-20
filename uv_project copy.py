@@ -35,8 +35,7 @@ if __name__ == "__main__":
         / 255.0
     )
 
-    optimizer = torch.optim.Adam(model.get_params(), 0.005)
-    save_image(model.get_texture(), "./output/proj/texture.png")
+    optimizer = torch.optim.Adam(model.parameters(), 0.01)
 
     for i in range(300):
         image, _ = model.render_all()
@@ -49,5 +48,5 @@ if __name__ == "__main__":
 
     res, res_ = model.render_all()
     save_image(res, "./output/proj/image.png")
-    save_image(model.get_texture(), "./output/proj/texture.png")
+    save_image(model.texture_map, "./output/proj/texture.png")
     print()
