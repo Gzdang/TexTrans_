@@ -102,15 +102,9 @@ class MasaProcessor:
         value = value.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
 
         # masactrl
-        qu, qc = query.chunk(2)
-        qc = attn_adain(qc)
-        query = torch.cat([qu, qc])
-
-        ku, kc = key.chunk(2)
-        key = torch.cat([ku, kc[:1].repeat(2, 1, 1, 1)])
-
-        vu, vc = value.chunk(2)
-        value = torch.cat([vu, vc[:1].repeat(2, 1, 1, 1)])
+        query = attn_adain(query)
+        key = key[:1].repeat(2,1,1,1)
+        value = value[:1].repeat(2,1,1,1)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1

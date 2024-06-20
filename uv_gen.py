@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from diffusers import DDIMScheduler, ControlNetModel
+from diffusers.image_processor import VaeImageProcessor
 
 from masactrl.pipeline import MyPipeline
 from PIL import Image
@@ -15,7 +16,7 @@ from masactrl.utils import image_transfer
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 model_path = "/home/lrz/diffuser/diffusion/xl"
 scheduler = DDIMScheduler(
-    beta_start=0.00085, beta_end=0.012, beta_schedule="linear", clip_sample=False, set_alpha_to_one=False
+    beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", clip_sample=False, set_alpha_to_one=False
 )
 
 model = MyPipeline.from_pretrained(model_path, scheduler=scheduler, torch_dtype=torch.float16).to(device)
@@ -26,6 +27,10 @@ depth_controlnet = ControlNetModel.from_pretrained(
 )
 
 model.depth_controlnet = depth_controlnet.to(device)
+model.control_image_processor = VaeImageProcessor(
+    vae_scale_factor=model.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+)
+
 
 base_res = 1024
 source_idx = 3
@@ -50,24 +55,20 @@ num_step = 30
 style_code, latents_list = model.invert(
     source_image,
     source_prompt,
-    guidance_scale=1,
     num_inference_steps=num_step,
-    control={"depth": source_depth},
-    control_scale=1,
-    return_intermediates=True,
+    # control={"depth": source_depth},
+    # control_scale=1,
     base_resolution=base_res,
 )
 
 
 tar_image_ = image_transfer(tar_image, source_image)
 start_code, _ = model.invert(
-    tar_image,
+    tar_image_,
     source_prompt,
-    guidance_scale=1,
     num_inference_steps=num_step,
-    control={"depth": tar_depth},
-    control_scale=-0.5,
-    return_intermediates=True,
+    # control={"depth": tar_depth},
+    # control_scale=-1,
     base_resolution=base_res,
 )
 
@@ -81,7 +82,6 @@ image_masactrl = model(
     prompts,
     latents=start_code,
     num_inference_steps=num_step,
-    guidance_scale=2,
     ref_intermediate_latents=latents_list,
     control=control,
     control_scale=1,
