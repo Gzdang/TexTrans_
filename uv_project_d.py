@@ -21,7 +21,7 @@ if __name__ == "__main__":
     opt = OmegaConf.create(GuideConfig)
 
     opt.shape_path = f"{os.environ['HOME']}/dataset/3D_Future/obj/0000017.obj"
-    model = TexturedMeshModel(opt, device="cuda")
+    model = TexturedMeshModel(opt, device="cuda", use_unet=False)
 
     out_dir = "./output/gen"
     sample_count = len(os.listdir(out_dir))

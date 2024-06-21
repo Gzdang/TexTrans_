@@ -25,6 +25,7 @@ class TexturedMeshModel(nn.Module):
         device=torch.device("cpu"),
         augmentations=False,
         augment_prob=0.5,
+        use_unet=True
     ):
 
         super().__init__()
@@ -35,6 +36,7 @@ class TexturedMeshModel(nn.Module):
         self.dy = self.opt.dy
         self.mesh_scale = self.opt.shape_scale
         self.texture_resolution = texture_resolution
+        self.use_unet = use_unet
         if initial_texture_path is not None:
             self.initial_texture_path = initial_texture_path
         else:
@@ -57,26 +59,27 @@ class TexturedMeshModel(nn.Module):
         # self.default_color = [0.8, 0.1, 0.8]
 
         # 初始化纹理图
-        self.texture_map = self.init_textures()
-
-        self.texture_seed = torch.randn(1, 3, texture_resolution, texture_resolution).to(self.device)
-        self.texture_unet = skip(
-            3,
-            3,
-            num_channels_down=[128] * 5,
-            num_channels_up=[128] * 5,
-            num_channels_skip=[128] * 5,
-            filter_size_up=3,
-            filter_size_down=3,
-            upsample_mode="nearest",
-            filter_skip_size=1,
-            need_sigmoid=True,
-            need_bias=True,
-            pad="reflection",
-            act_fun="LeakyReLU",
-        ).to(self.device)
-
-        # self.texture_img = self.init_paint()
+        if use_unet:
+            self.texture_seed = torch.randn(1, 3, texture_resolution, texture_resolution).to(self.device)
+            self.texture_unet = skip(
+                3,
+                3,
+                num_channels_down=[128] * 5,
+                num_channels_up=[128] * 5,
+                num_channels_skip=[128] * 5,
+                filter_size_up=3,
+                filter_size_down=3,
+                upsample_mode="nearest",
+                filter_skip_size=1,
+                need_sigmoid=False,
+                # need_tanh=True,
+                need_bias=True,
+                pad="reflection",
+                act_fun="LeakyReLU",
+            ).to(self.device)
+            self.texture_map = None
+        else:
+            self.texture_map = self.init_textures()
 
         # 初始化模型uv坐标
         self.vt, self.ft = self.init_texture_map()
@@ -150,6 +153,9 @@ class TexturedMeshModel(nn.Module):
                 torch.save(ft.cpu(), ft_cache)
         return vt, ft
 
+    def get_last_layer(self):
+        return self.texture_unet[-1][-1].weight
+    
     def forward(self, x):
         raise NotImplementedError
 
@@ -157,6 +163,8 @@ class TexturedMeshModel(nn.Module):
         return self.texture_unet.parameters()
     
     def get_texture(self):
+        if self.texture_map is not None:
+            return self.texture_map
         return self.texture_unet(self.texture_seed)
 
     def render(
@@ -169,7 +177,12 @@ class TexturedMeshModel(nn.Module):
     ):
         augmented_vertices = self.mesh.vertices
 
-        texture_img = self.texture_unet(self.texture_seed)
+        if self.use_unet:
+            texture_img = self.texture_unet(self.texture_seed)
+            self.texture_map = texture_img
+        else:
+            texture_img = self.texture_map
+
         render_cache = self.render_cache
 
         images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(

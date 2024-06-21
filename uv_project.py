@@ -1,12 +1,14 @@
 import os
 import numpy as np
 import torch
+
+from omegaconf import OmegaConf
 from PIL import Image
 from torchvision.utils import save_image
 
 from mesh.textured_mesh import TexturedMeshModel
 from mesh.config import GuideConfig
-from omegaconf import OmegaConf
+from mesh.unet.lipis import LPIPS
 
 
 def reshape_image(image_batch):
@@ -35,19 +37,22 @@ if __name__ == "__main__":
         / 255.0
     )
 
-    optimizer = torch.optim.Adam(model.get_params(), 0.005)
-    save_image(model.get_texture(), "./output/proj/texture.png")
+    perceptual_loss = LPIPS(True).cuda().eval()
+    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
 
-    for i in range(300):
+    for i in range(500):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
+        loss += perceptual_loss(target, image)[0][0][0][0]
         print(loss)
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
+        save_image(image, "output/proj/test.png")
+
     res, res_ = model.render_all()
     save_image(res, "./output/proj/image.png")
-    save_image(model.get_texture(), "./output/proj/texture.png")
+    save_image(model.texture_map, "./output/proj/texture.png")
     print()

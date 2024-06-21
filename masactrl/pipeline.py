@@ -206,7 +206,7 @@ class MyPipeline(StableDiffusionXLPipeline):
 
             # latents[1] = feat_adain(latents[1], latents[0])
             # latents, pred_x0 = self.step(noise_pred, t, latents)
-            save_image(self.latent2image(latents.to(torch.float32), "pt"), "test.png")
+            # save_image(self.latent2image(latents.to(torch.float32), "pt"), "test.png")
 
         image = self.latent2image(latents.to(torch.float32), return_type="pt")
         return image
