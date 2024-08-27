@@ -236,3 +236,18 @@ class TexturedMeshModel(nn.Module):
         img_res = self.reshape_image(res["image"])
         mask_res = self.reshape_image(res["mask"])
         return img_res, mask_res
+    
+    def project(self, target):
+        self.init_texture_map()
+        optimizer = torch.optim.Adam(self.parameters(), 0.01)
+        for i in range(200):
+            image, _ = self.render_all()
+            loss = torch.nn.functional.l1_loss(image, target)
+            # print(loss, end="\r")
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        # print()
+        res, _ = self.render_all()
+        return res.detach()
+

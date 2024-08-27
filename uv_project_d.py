@@ -40,7 +40,6 @@ if __name__ == "__main__":
     for i in range(300):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
-        print(loss)
 
         loss.backward()
         optimizer.step()
