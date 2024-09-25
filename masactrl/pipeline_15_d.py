@@ -141,13 +141,13 @@ class MyPipeline(StableDiffusionPipeline):
             height = base_resolution
 
         # define initial latents
-        latents_shape = (batch_size, self.unet.in_channels, height // 8, width // 8)
-        if latents is None:
-            latents = torch.randn(latents_shape, device=DEVICE)
-        else:
-            assert (
-                latents.shape == latents_shape
-            ), f"The shape of input latent tensor {latents.shape} should equal to predefined one."
+        # latents_shape = (batch_size, self.unet.in_channels, height // 8, width // 8)
+        # if latents is None:
+        #     latents = torch.randn(latents_shape, device=DEVICE)
+        # else:
+        #     assert (
+        #         latents.shape == latents_shape
+        #     ), f"The shape of input latent tensor {latents.shape} should equal to predefined one."
 
         # unconditional embedding for classifier free guidance
         if guidance_scale > 1.0:
@@ -170,7 +170,7 @@ class MyPipeline(StableDiffusionPipeline):
             if isinstance(depth, list):
                 source_depth = control_image_processor.preprocess(depth[0], height=height, width=width)
                 tar_depth = control_image_processor.preprocess(depth[1], height=height, width=width)
-                depth = torch.cat([source_depth, tar_depth] * (text_embeddings.shape[0] // 2)).to(
+                depth = torch.cat([source_depth, source_depth, tar_depth, tar_depth]).to(
                     self.depth_controlnet.device
                 )
             else:
@@ -210,7 +210,7 @@ class MyPipeline(StableDiffusionPipeline):
                     down_block_depth, mid_block_depth = self.depth_controlnet(
                         model_inputs,
                         t,
-                        encoder_hidden_states=text_embeddings,
+                        encoder_hidden_states=torch.cat([text_embeddings]*2),
                         controlnet_cond=depth.half(),
                         conditioning_scale=control_scale,
                         return_dict=False,
@@ -235,7 +235,7 @@ class MyPipeline(StableDiffusionPipeline):
                 return self.unet(
                     model_inputs,
                     t,
-                    encoder_hidden_states=text_embeddings,
+                    encoder_hidden_states=torch.cat([text_embeddings]*2),
                     down_block_additional_residuals=down_block_res_samples,
                     mid_block_additional_residual=mid_block_res_sample,
                 ).sample
@@ -301,7 +301,7 @@ class MyPipeline(StableDiffusionPipeline):
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
 
-        image = self.latent2image(latents[-1:].float(), return_type="pt")
+        image = self.latent2image(latents.float(), return_type="pt")
         if uv_model is not None:
             save_image(uv_model.texture_map, "./output/proj/texture.png")
         if return_intermediates:
@@ -431,7 +431,6 @@ class MyPipeline(StableDiffusionPipeline):
                     mid_block_additional_residual=mid_block_res_sample,
                 ).sample
             noise_pred = get_noise()
-            last_noise = noise_pred
 
             if guidance_scale > 1.0:
                 noise_pred_uncon, noise_pred_con = noise_pred.chunk(2, dim=0)
@@ -444,9 +443,4 @@ class MyPipeline(StableDiffusionPipeline):
             pred_x0_list.append(pred_x0)
             # save_image(self.latent2image(pred_x0, "pt"), "test.png")
 
-        return latents, latents_list, last_noise
-
-    def add_noise(self, img, noise):
-        latents = self.image2latent(img)
-        self.scheduler.set_timesteps(30)
-        return self.scheduler.add_noise(latents, noise, self.scheduler.timesteps[0])
+        return latents, latents_list
