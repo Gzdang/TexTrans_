@@ -431,7 +431,6 @@ class MyPipeline(StableDiffusionPipeline):
                     mid_block_additional_residual=mid_block_res_sample,
                 ).sample
             noise_pred = get_noise()
-            last_noise = noise_pred
 
             if guidance_scale > 1.0:
                 noise_pred_uncon, noise_pred_con = noise_pred.chunk(2, dim=0)
@@ -444,7 +443,7 @@ class MyPipeline(StableDiffusionPipeline):
             pred_x0_list.append(pred_x0)
             # save_image(self.latent2image(pred_x0, "pt"), "test.png")
 
-        return latents, latents_list, last_noise
+        return latents, latents_list
 
     def add_noise(self, img, noise):
         latents = self.image2latent(img)
