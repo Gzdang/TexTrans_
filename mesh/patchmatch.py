@@ -121,10 +121,10 @@ def NNS(img, ref, p_size, itr):
         print("iteration: %d" % (itr))
     return f
 
-def pm(tar_img, ref_img, p_size = 9, itr = 5):
-    tar_img = np.array(Image.open(tar_img))
-    size = tar_img.shape[0]
+def pm(tar_img, ref_img, p_size = 9, itr = 5, size=256):
+    tar_img = np.array(Image.open(tar_img).resize((size, size)))
     ref_img = np.array(Image.open(ref_img).resize((size, size)))
+    ref_img = np.concatenate((ref_img, ref_img.transpose(1,0,2)), 0)
     if ref_img.shape[2] == 4:
         ref_img = ref_img[:, :, :-1]
     

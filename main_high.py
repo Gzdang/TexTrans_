@@ -30,7 +30,7 @@ ref_prompt = ""
 target_prompt = ""
 prompts = [ref_prompt, target_prompt]
 
-num_step = 30
+num_step = 50
 
 # invert the source image
 style_code, latents_list = model.invert(
@@ -54,7 +54,7 @@ start_code, _ = model.invert(
 )
 start_code = start_code.expand(len(prompts), -1, -1, -1)
 
-set_masactrl_attn(model.unet)
+set_masactrl_attn(model)
 masa_imgs = model(
     prompts,
     latents=start_code,

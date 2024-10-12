@@ -144,8 +144,8 @@ class MyPipeline(StableDiffusionXLPipeline):
         if control.get("depth") is not None:
             depth = control["depth"]
             depth = self.control_image_processor.preprocess(depth, height=height, width=width)
-            depth = depth.expand(prompt_embeds.shape[0], -1, -1, -1).to(self.depth_controlnet.device)
-            control["depth"] = depth.to(self.depth_controlnet.dtype)
+            depth = depth.expand(prompt_embeds.shape[0], -1, -1, -1).to(self.controlnet.device)
+            control["depth"] = depth.to(self.controlnet.dtype)
 
         self.scheduler.set_timesteps(num_inference_steps)
         for i, t in enumerate(tqdm(self.scheduler.timesteps, desc="DDIM Sampler")):
@@ -165,7 +165,7 @@ class MyPipeline(StableDiffusionXLPipeline):
             mid_block_res_sample = None
             if control.get("depth") is not None:
                 depth = control["depth"]
-                down_block_depth, mid_block_depth = self.depth_controlnet(
+                down_block_depth, mid_block_depth = self.controlnet(
                     model_inputs,
                     t,
                     encoder_hidden_states=prompt_embeds,
@@ -254,8 +254,8 @@ class MyPipeline(StableDiffusionXLPipeline):
         if control.get("depth") is not None:
             depth = control["depth"]
             depth = self.control_image_processor.preprocess(depth, height=height, width=width)
-            depth = depth.expand(batch_size, -1, -1, -1).to(self.depth_controlnet.device)
-            control["depth"] = depth.to(self.depth_controlnet.dtype)
+            depth = depth.expand(batch_size, -1, -1, -1).to(self.controlnet.device)
+            control["depth"] = depth.to(self.controlnet.dtype)
 
         add_text_embeds = pooled_prompt_embeds
 
@@ -292,7 +292,7 @@ class MyPipeline(StableDiffusionXLPipeline):
             mid_block_res_sample = None
             if control.get("depth") is not None:
                 depth = control["depth"]
-                down_block_depth, mid_block_depth = self.depth_controlnet(
+                down_block_depth, mid_block_depth = self.controlnet(
                     model_inputs,
                     t,
                     encoder_hidden_states=prompt_embeds,

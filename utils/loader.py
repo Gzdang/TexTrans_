@@ -26,11 +26,11 @@ def load_model(model_path, device):
     model.vae.requires_grad_(False)
     model.vae.to(dtype=torch.float32)
 
-    depth_controlnet = ControlNetModel.from_pretrained(
+    controlnet = ControlNetModel.from_pretrained(
         "/home/lrz/diffuser/controlnet/depth_15", torch_dtype=torch.float16
     ).eval()
 
-    model.depth_controlnet = depth_controlnet.to(device)
+    model.controlnet = controlnet.to(device)
 
     return model
 

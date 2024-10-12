@@ -12,6 +12,8 @@ def save_res(ref_img, tar_img, masa_img, device):
     os.makedirs(out_dir, exist_ok=True)
 
     ref_img = torch.tensor(np.array(ref_img), dtype=torch.float).permute(2, 0, 1).unsqueeze(0).to(device) / 255
+    if ref_img.shape[1] == 4:
+        ref_img = ref_img[:,:-1,:,:]
     tar_img = torch.tensor(np.array(tar_img), dtype=torch.float).permute(2, 0, 1).unsqueeze(0).to(device) / 255
     out_image = torch.cat([ref_img, masa_img, tar_img], dim=0)
 

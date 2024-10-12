@@ -171,11 +171,11 @@ class MyPipeline(StableDiffusionPipeline):
                 source_depth = control_image_processor.preprocess(depth[0], height=height, width=width)
                 tar_depth = control_image_processor.preprocess(depth[1], height=height, width=width)
                 depth = torch.cat([source_depth, tar_depth] * (text_embeddings.shape[0] // 2)).to(
-                    self.depth_controlnet.device
+                    self.controlnet.device
                 )
             else:
                 depth = control_image_processor.preprocess(depth, height=height, width=width)
-                depth = depth.expand(text_embeddings.shape[0], -1, -1, -1).to(self.depth_controlnet.device)
+                depth = depth.expand(text_embeddings.shape[0], -1, -1, -1).to(self.controlnet.device)
             control["depth"] = depth
 
         # iterative sampling
@@ -188,6 +188,13 @@ class MyPipeline(StableDiffusionPipeline):
                 # note that the batch_size >= 2
                 latents_ref = ref_intermediate_latents[-1 - i]
                 _, latents_cur = latents.chunk(2)
+
+                mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
+                std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
+                mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
+                std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
+
+                latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
 
                 # if 900<t:
                 #     latents_cur = feat_adain(latents_cur, latents_ref)
@@ -207,7 +214,7 @@ class MyPipeline(StableDiffusionPipeline):
                 mid_block_res_sample = None
                 if control.get("depth") is not None:
                     depth = control["depth"]
-                    down_block_depth, mid_block_depth = self.depth_controlnet(
+                    down_block_depth, mid_block_depth = self.controlnet(
                         model_inputs,
                         t,
                         encoder_hidden_states=text_embeddings,
@@ -377,11 +384,11 @@ class MyPipeline(StableDiffusionPipeline):
                 source_depth = control_image_processor.preprocess(depth[0], height=height, width=width)
                 tar_depth = control_image_processor.preprocess(depth[1], height=height, width=width)
                 depth = torch.cat([source_depth, tar_depth] * (text_embeddings.shape[0] // 2)).to(
-                    self.depth_controlnet.device
+                    self.controlnet.device
                 )
             else:
                 depth = control_image_processor.preprocess(depth, height=height, width=width)
-                depth = depth.expand(text_embeddings.shape[0], -1, -1, -1).to(self.depth_controlnet.device)
+                depth = depth.expand(text_embeddings.shape[0], -1, -1, -1).to(self.controlnet.device)
             control["depth"] = depth
 
         # interative sampling
@@ -401,7 +408,7 @@ class MyPipeline(StableDiffusionPipeline):
                 mid_block_res_sample = None
                 if control.get("depth") is not None:
                     depth = control["depth"]
-                    down_block_depth, mid_block_depth = self.depth_controlnet(
+                    down_block_depth, mid_block_depth = self.controlnet(
                         model_inputs,
                         t,
                         encoder_hidden_states=text_embeddings,
