@@ -1,3 +1,4 @@
+import math
 import re
 
 import torch
@@ -10,41 +11,43 @@ from typing import Optional
 from masactrl.utils import attn_adain
 
 
-def set_masactrl_attn(model):
-    attn_processor = model.attn_processors
+def set_masactrl_attn(model, attn_init_dim=None):
+    unet = model.unet
+    attn_processor = unet.attn_processors
     pattern = "(up|mid)\w.*attn1"
 
-    masactrl_processor = MasaProcessor()
+    masactrl_processor = MasaProcessor(attn_init_dim)
     for k, v in attn_processor.items():
         if re.match(pattern, k) is not None:
             attn_processor[k] = masactrl_processor
 
-    model.set_attn_processor(attn_processor)
-
+    unet.set_attn_processor(attn_processor)
 
 class MasaProcessor:
     r"""
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self):
+    def __init__(self, attn_init_dim=None):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
 
-        # attn_dims = [16]
-        # self.attn_masks={}
-        # for attn_dim in attn_dims:
-        #     attn_mask = torch.zeros(6*(attn_dim)**2, 6*(attn_dim)**2)
-        #     for i in range(3):
-        #         for j in range(2):
-        #             temp = torch.zeros(attn_dim*3, attn_dim*2)
-        #             temp[i*attn_dim: (i+1)*attn_dim, j*attn_dim:(j+1)*attn_dim] = 1
-        #             temp = torch.flatten(temp).unsqueeze(0).T * torch.flatten(temp).unsqueeze(0)
-        #             attn_mask += temp
+        if attn_init_dim is not None:
+            attn_dims = [attn_init_dim, attn_init_dim//2, attn_init_dim//4, attn_init_dim//8]
+            self.attn_masks={}
+            for attn_dim in attn_dims:
+                attn_mask = torch.zeros(9*(attn_dim)**2, 9*(attn_dim)**2)
+                for i in range(3):
+                    for j in range(3):
+                        temp = torch.zeros(attn_dim*3, attn_dim*3)
+                        temp[i*attn_dim: (i+1)*attn_dim, j*attn_dim:(j+1)*attn_dim] = 1
+                        temp = torch.flatten(temp).unsqueeze(0).T * torch.flatten(temp).unsqueeze(0)
+                        attn_mask += temp
 
-        #     attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask, torch.ones_like(attn_mask), attn_mask])
-        #     attn_mask = attn_mask.type(torch.bool).unsqueeze(1).cuda().requires_grad_(False)
-        #     self.attn_masks[attn_dim] = attn_mask
+                attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask])
+                # attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask, torch.ones_like(attn_mask), attn_mask])
+                attn_mask = attn_mask.type(torch.bool).unsqueeze(1).cuda().requires_grad_(False)
+                self.attn_masks[attn_dim] = attn_mask
 
     def __call__(
         self,
@@ -79,6 +82,10 @@ class MasaProcessor:
             # scaled_dot_product_attention expects attention_mask shape to be
             # (batch, heads, source_length, target_length)
             attention_mask = attention_mask.view(batch_size, attn.heads, -1, attention_mask.shape[-1])
+        else:
+            sub_len = int(math.sqrt(hidden_states.shape[-2]/9))
+            if sub_len in self.attn_masks.keys():
+                attention_mask = self.attn_masks[sub_len]
 
         if attn.group_norm is not None:
             hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
@@ -101,22 +108,21 @@ class MasaProcessor:
         key = key.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
         value = value.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
 
+        if attn.norm_q is not None:
+            query = attn.norm_q(query)
+        if attn.norm_k is not None:
+            key = attn.norm_k(key)
+
         # masactrl
-        query = attn_adain(query)
-        key = key[:1].repeat(2,1,1,1)
-        value = value[:1].repeat(2,1,1,1)
+        # query = attn_adain(query)
+        key = key[:1].repeat(2, 1, 1, 1)
+        value = value[:1].repeat(2, 1, 1, 1)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1
         hidden_states = F.scaled_dot_product_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
         )
-
-        # sub_len = int(math.sqrt(query.shape[-2]/6))
-        # if sub_len in self.attn_masks.keys():
-        #     hidden_states = F.scaled_dot_product_attention(query, key, value, self.attn_masks[sub_len])
-        # else:
-        #     hidden_states = F.scaled_dot_product_attention(query, key, value)
 
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)

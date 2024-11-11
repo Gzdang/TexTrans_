@@ -25,12 +25,11 @@ def reshape_image(image_batch):
 if __name__ == "__main__":
     opt = OmegaConf.create(GuideConfig)
 
-    img_size = high_size * 3
-    render_size = high_size
+    img_size = low_size * 3
+    render_size = low_size
 
     object_list_file = f"{os.environ['HOME']}/dataset/3D_Future/split/chair.txt"
-    init_texture = "./res.png"
-    model = load_uv_model(object_list_file, tar_idx, render_size, uv_size_high, True, init_texture)
+    model = load_uv_model(object_list_file, tar_idx, render_size, uv_size_low, True)
 
     out_dir = "./output/gen"
     sample_count = len(os.listdir(out_dir))
@@ -45,9 +44,9 @@ if __name__ == "__main__":
     )
 
     perceptual_loss = LPIPS(True).cuda().eval()
-    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 
-    for i in range(500):
+    for i in range(1000):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
@@ -57,7 +56,7 @@ if __name__ == "__main__":
         optimizer.step()
         optimizer.zero_grad()
 
-        save_image(image, "output/proj/test.png")
+        # save_image(image, "output/proj/test.png")
 
     res, res_ = model.render_all()
     save_image(res, "./output/proj/image.png")

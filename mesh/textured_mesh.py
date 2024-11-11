@@ -13,13 +13,12 @@ from mesh.mesh import Mesh
 from mesh.render import Render
 from mesh.unet.skip import skip
 
-
 class TexturedMeshModel(nn.Module):
     def __init__(
         self,
         opt: OmegaConf,
-        render_grid_size=512,
-        texture_resolution=1024,
+        render_grid_size,
+        texture_resolution,
         initial_texture_path=None,
         cache_path=None,
         device=torch.device("cpu"),
@@ -29,6 +28,7 @@ class TexturedMeshModel(nn.Module):
     ):
 
         super().__init__()
+        self.render_size = render_grid_size
         self.device = device
         self.augmentations = augmentations
         self.augment_prob = augment_prob
@@ -37,10 +37,7 @@ class TexturedMeshModel(nn.Module):
         self.mesh_scale = self.opt.shape_scale
         self.texture_resolution = texture_resolution
         self.use_unet = use_unet
-        if initial_texture_path is not None:
-            self.initial_texture_path = initial_texture_path
-        else:
-            self.initial_texture_path = self.opt.initial_texture
+        self.initial_texture_path = initial_texture_path
         self.cache_path = cache_path
 
         # uv特征数量
@@ -232,7 +229,22 @@ class TexturedMeshModel(nn.Module):
         elev_list = [t * np.pi for t in (1 / 4, 1 / 4, 1 / 4, 1 / 2, 1 / 2, 1 / 2, 3 / 4, 3 / 4, 3 / 4)]
         azim_list = [t * np.pi for t in (5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3)]
 
-        res = self.render(elev_list, azim_list, 3, dim=341)
+        res = self.render(elev_list, azim_list, 3, dim=self.render_size)
         img_res = self.reshape_image(res["image"])
         mask_res = self.reshape_image(res["mask"])
         return img_res, mask_res
+    
+    def project(self, target):
+        # self.init_texture_map()
+        optimizer = torch.optim.Adam(self.parameters(), 1e-4)
+        for _ in range(200):
+            image, _ = self.render_all()
+            loss = torch.nn.functional.l1_loss(image, target.detach())
+            # print(loss, end="\r")
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        # print()
+        res, _ = self.render_all()
+        return res.detach()
+
