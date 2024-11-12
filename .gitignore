@@ -1,7 +1,9 @@
 *__pycache__
 *.png
 .vscode
+.history
 
 taming
 output
 resource
+temp

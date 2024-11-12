@@ -37,8 +37,8 @@ class RenderHandle:
         self.mesh_num = len(self.mesh_path_list)
         self.mesh_combination = self.mesh_num * (self.mesh_num - 1)
         self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-        self.azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
-        # self.elev_list = [t*np.pi for t in (1/6, 1/6, 1/6, 5/12, 5/12, 5/12, 5/6, 5/6, 5/6)]
+        self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+        # self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
         # self.azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
         self.camera_list = list(zip(self.elev_list, self.azim_list))
         self.camera_num = len(self.elev_list)
@@ -98,5 +98,5 @@ class RenderHandle:
             save_image(torch.cat(res_normal_list), os.path.join(render_out_path, f"all_normal.png"), nrow=3, padding=0)
 
 if __name__ == "__main__":
-    handler = RenderHandle(f"{os.environ['HOME']}/dataset/3D_Future", "chair", render_size=341, image_size=341, is_load_mesh=False)
-    handler.render_images("./dataset/new")
+    handler = RenderHandle(f"resource/3D_Future", "chair", render_size=512, image_size=512, is_load_mesh=False)
+    handler.render_images("./dataset/512_new")

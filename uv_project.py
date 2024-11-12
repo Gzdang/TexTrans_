@@ -7,10 +7,7 @@ from PIL import Image
 from torchvision.utils import save_image
 
 from mesh.textured_mesh import TexturedMeshModel
-from mesh.config import GuideConfig
 from mesh.unet.lipis import LPIPS
-
-from config import *
 from utils.loader import load_uv_model
 
 
@@ -22,15 +19,11 @@ def reshape_image(image_batch):
     return torch.cat(rows, -1)
 
 
-if __name__ == "__main__":
-    opt = OmegaConf.create(GuideConfig)
-
-    img_size = high_size * 3
-    render_size = high_size
-
-    object_list_file = f"{os.environ['HOME']}/dataset/3D_Future/split/chair.txt"
-    init_texture = "./res.png"
-    model = load_uv_model(object_list_file, tar_idx, render_size, uv_size_high, True, init_texture)
+def main(cfg):
+    render_size = cfg.masa.size
+    img_size = render_size * 3
+    
+    model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, True)
 
     out_dir = "./output/gen"
     sample_count = len(os.listdir(out_dir))
@@ -45,9 +38,9 @@ if __name__ == "__main__":
     )
 
     perceptual_loss = LPIPS(True).cuda().eval()
-    optimizer = torch.optim.Adam(model.parameters(), 1e-4)
-
-    for i in range(500):
+    optimizer = torch.optim.AdamW(model.parameters(), 1e-4)
+    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[1000, 1500], gamma=0.5)
+    for i in range(2000):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
@@ -56,10 +49,14 @@ if __name__ == "__main__":
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        scheduler.step()
 
-        save_image(image, "output/proj/test.png")
+        # save_image(image, "output/proj/test.png")
 
     res, res_ = model.render_all()
     save_image(res, "./output/proj/image.png")
     save_image(model.texture_map, "./output/proj/texture.png")
-    print()
+
+if __name__ == "__main__":
+    cfg = OmegaConf.load("configs/config.yaml")
+    main(cfg)

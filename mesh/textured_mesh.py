@@ -18,7 +18,6 @@ class TexturedMeshModel(nn.Module):
         self,
         opt: OmegaConf,
         render_grid_size,
-        texture_resolution,
         initial_texture_path=None,
         cache_path=None,
         device=torch.device("cpu"),
@@ -35,7 +34,7 @@ class TexturedMeshModel(nn.Module):
         self.opt = opt
         self.dy = self.opt.dy
         self.mesh_scale = self.opt.shape_scale
-        self.texture_resolution = texture_resolution
+        self.texture_resolution = self.opt.texture_resolution
         self.use_unet = use_unet
         self.initial_texture_path = initial_texture_path
         self.cache_path = cache_path
@@ -57,7 +56,7 @@ class TexturedMeshModel(nn.Module):
 
         # 初始化纹理图
         if use_unet:
-            self.texture_seed = torch.randn(1, 3, texture_resolution, texture_resolution).to(self.device)
+            self.texture_seed = torch.randn(1, 3, self.texture_resolution, self.texture_resolution).to(self.device)
             self.texture_unet = skip(
                 3,
                 3,
@@ -226,8 +225,11 @@ class TexturedMeshModel(nn.Module):
     def render_all(self):
         # elev_list = [t*np.pi for t in (1/6, 1/6, 1/6, 5/12, 5/12, 5/12, 5/6, 5/6, 5/6)]
         # azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
-        elev_list = [t * np.pi for t in (1 / 4, 1 / 4, 1 / 4, 1 / 2, 1 / 2, 1 / 2, 3 / 4, 3 / 4, 3 / 4)]
-        azim_list = [t * np.pi for t in (5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3)]
+        # elev_list = [t * np.pi for t in (1 / 4, 1 / 4, 1 / 4, 1 / 2, 1 / 2, 1 / 2, 3 / 4, 3 / 4, 3 / 4)]
+        # azim_list = [t * np.pi for t in (5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3)]
+
+        elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+        azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
 
         res = self.render(elev_list, azim_list, 3, dim=self.render_size)
         img_res = self.reshape_image(res["image"])

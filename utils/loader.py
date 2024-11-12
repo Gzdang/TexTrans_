@@ -7,14 +7,13 @@ from omegaconf import OmegaConf
 from diffusers import DDIMScheduler, ControlNetModel
 
 from masactrl.pipeline_15 import MyPipeline
-from mesh.config import GuideConfig
 from mesh.textured_mesh import TexturedMeshModel
 
 from diffusers.image_processor import VaeImageProcessor
 from transformers import CLIPImageProcessor
 
 
-def load_model(model_path, device):
+def load_model(cfg, device):
     scheduler = DDIMScheduler(
         beta_start=0.00085,
         beta_end=0.012,
@@ -24,7 +23,7 @@ def load_model(model_path, device):
     )
 
     model = MyPipeline.from_pretrained(
-        model_path, scheduler=scheduler, torch_dtype=torch.float16
+        cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16
     ).to(device)
     model.vae.requires_grad_(False)
     model.unet.requires_grad_(False)
@@ -32,7 +31,7 @@ def load_model(model_path, device):
     # model.vae.to(dtype=torch.float32)
 
     controlnet = ControlNetModel.from_pretrained(
-        "/home/lrz/diffuser/controlnet/depth_15", torch_dtype=torch.float16
+        cfg.controlnet, torch_dtype=torch.float16
     ).eval()
 
     model.controlnet = controlnet.to(device)
@@ -60,13 +59,13 @@ def load_imgs(resource_dir, ref_idx, tar_idx, size):
 
     return ref_img, ref_depth, tar_img, tar_depth
 
-def load_uv_model(object_list_file, obj_idx, render_size, uv_size, use_unet, init_texture = None):
+def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture = None):
+    object_list_file = f"{cfg.path}/split/chair.txt"
     object_list = []
     with open(object_list_file) as f:
         for obj_name in f.readlines():
-            object_list.append(f"{os.environ['HOME']}/dataset/3D_Future/obj/{obj_name.strip()}.obj")
+            object_list.append(f"{cfg.path}/obj/{obj_name.strip()}.obj")
 
-    opt = OmegaConf.create(GuideConfig)
-    opt.shape_path = object_list[obj_idx]
-    uv_model = TexturedMeshModel(opt, render_size, uv_size, init_texture, device="cuda", use_unet=use_unet)
+    cfg.shape_path = object_list[obj_idx]
+    uv_model = TexturedMeshModel(cfg, render_size, init_texture, device="cuda", use_unet=use_unet)
     return uv_model
