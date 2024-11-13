@@ -159,6 +159,8 @@ class Render(torch.nn.Module):
                 face_vertices_camera[:, :, :, -1:],
             )
 
+            depth = self.normalize_depth(depth)
+
             mask = (face_idx > -1).float()[..., None]
             normal = face_normals[0][face_idx, :]
 

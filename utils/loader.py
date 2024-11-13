@@ -6,7 +6,8 @@ from omegaconf import OmegaConf
 
 from diffusers import DDIMScheduler, ControlNetModel
 
-from masactrl.pipeline_15 import MyPipeline
+from masactrl.pipeline import MyPipeline
+from masactrl.pipeline_xl import MyPipelineXL
 from mesh.textured_mesh import TexturedMeshModel
 
 from diffusers.image_processor import VaeImageProcessor
@@ -21,18 +22,25 @@ def load_model(cfg, device):
         clip_sample=False,
         set_alpha_to_one=False,
     )
+    if cfg.type == "sdxl":
+        model = MyPipelineXL.from_pretrained(
+            cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16
+        ).to(device)
+        model.vae.to(dtype=torch.float32)
+        controlnet = ControlNetModel.from_pretrained(
+            cfg.controlnet, variant="fp16", torch_dtype=torch.float16
+        ).eval()
+    else:
+        model = MyPipeline.from_pretrained(
+            cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16
+        ).to(device)
+        controlnet = ControlNetModel.from_pretrained(
+            cfg.controlnet, torch_dtype=torch.float16
+        ).eval()
 
-    model = MyPipeline.from_pretrained(
-        cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16
-    ).to(device)
     model.vae.requires_grad_(False)
     model.unet.requires_grad_(False)
     model.text_encoder.requires_grad_(False)
-    # model.vae.to(dtype=torch.float32)
-
-    controlnet = ControlNetModel.from_pretrained(
-        cfg.controlnet, torch_dtype=torch.float16
-    ).eval()
 
     model.controlnet = controlnet.to(device)
     model.controlnet.requires_grad_(False)
@@ -62,10 +70,14 @@ def load_imgs(resource_dir, ref_idx, tar_idx, size):
 def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture = None):
     object_list_file = f"{cfg.path}/split/chair.txt"
     object_list = []
+    texture_list = []
     with open(object_list_file) as f:
         for obj_name in f.readlines():
             object_list.append(f"{cfg.path}/obj/{obj_name.strip()}.obj")
+            texture_list.append(f"{cfg.path}/texture/{obj_name.strip()}.png")
 
     cfg.shape_path = object_list[obj_idx]
+    if init_texture is None:
+        init_texture = texture_list[obj_idx]
     uv_model = TexturedMeshModel(cfg, render_size, init_texture, device="cuda", use_unet=use_unet)
     return uv_model

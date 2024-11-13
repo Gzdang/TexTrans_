@@ -82,7 +82,7 @@ class MasaProcessor:
             # scaled_dot_product_attention expects attention_mask shape to be
             # (batch, heads, source_length, target_length)
             attention_mask = attention_mask.view(batch_size, attn.heads, -1, attention_mask.shape[-1])
-        else:
+        elif hasattr(self, "attn_masks"):
             sub_len = int(math.sqrt(hidden_states.shape[-2]/9))
             if sub_len in self.attn_masks.keys():
                 attention_mask = self.attn_masks[sub_len]
@@ -115,8 +115,8 @@ class MasaProcessor:
 
         # masactrl
         # query = attn_adain(query)
-        key = key[:1].repeat(2, 1, 1, 1)
-        value = value[:1].repeat(2, 1, 1, 1)
+        key = key.chunk(2)[0].repeat(2, 1, 1, 1)
+        value = value.chunk(2)[0].repeat(2, 1, 1, 1)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1
