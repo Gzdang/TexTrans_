@@ -19,11 +19,10 @@ def main(cfg):
     # load obj
     tar_uv_model = load_uv_model(cfg.mesh, masa_cfg.tar_idx, render_size, True)
 
-    ref_prompt = ""
-    target_prompt = ""
+    ref_prompt, target_prompt = "", ""
     prompts = [ref_prompt, target_prompt]
 
-    num_step = 50
+    num_step = cfg.model.num_step
 
     # invert the source image
     style_code, latents_list = model.invert(

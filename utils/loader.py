@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 
 from PIL import Image
 from omegaconf import OmegaConf
@@ -22,7 +23,7 @@ def load_model(cfg, device):
         clip_sample=False,
         set_alpha_to_one=False,
     )
-    if cfg.type == "sdxl":
+    if "type" in cfg and cfg.type == "sdxl":
         model = MyPipelineXL.from_pretrained(
             cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16
         ).to(device)
@@ -81,3 +82,17 @@ def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture = None):
         init_texture = texture_list[obj_idx]
     uv_model = TexturedMeshModel(cfg, render_size, init_texture, device="cuda", use_unet=use_unet)
     return uv_model
+
+def load_uv_mask(cfg, obj_idx):
+    object_list_file = f"{cfg.path}/split/chair.txt"
+    texture_list = []
+    with open(object_list_file) as f:
+        for obj_name in f.readlines():
+            texture_list.append(f"{cfg.path}/texture/{obj_name.strip()}.png")
+
+    init_texture = texture_list[obj_idx]
+    texture = np.array(Image.open(init_texture).resize([cfg.texture_resolution]*2))
+    mask = (texture[:,:,-1]==255).astype(np.uint8)
+    Image.fromarray(mask*255).save("temp/mask.png")
+    Image.fromarray((1-mask)*255).save("temp/_mask.png")
+    return mask

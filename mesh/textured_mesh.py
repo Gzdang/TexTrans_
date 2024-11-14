@@ -73,6 +73,10 @@ class TexturedMeshModel(nn.Module):
                 pad="reflection",
                 act_fun="LeakyReLU",
             ).to(self.device)
+            if "texture_unet_path" in self.opt:
+                state_dict = torch.load(self.opt.texture_unet_path, weights_only=True)
+                self.texture_seed = (state_dict["seed"])
+                self.texture_unet.load_state_dict(state_dict["unet"])
             self.texture_map = None
         else:
             self.texture_map = self.init_textures()
@@ -162,6 +166,13 @@ class TexturedMeshModel(nn.Module):
         if self.texture_map is not None:
             return self.texture_map
         return self.texture_unet(self.texture_seed)
+    
+    def save_texture_unet(self, out_path):
+        state_dict = {
+            "seed": self.texture_seed,
+            "unet": self.texture_unet.state_dict()
+        }
+        torch.save(state_dict, out_path)
 
     def render(
         self,
@@ -179,7 +190,8 @@ class TexturedMeshModel(nn.Module):
         else:
             texture_img = self.texture_map
 
-        render_cache = self.render_cache
+        # render_cache = self.render_cache
+        render_cache = None
 
         images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(
             augmented_vertices,
@@ -223,20 +235,18 @@ class TexturedMeshModel(nn.Module):
         return torch.cat(cols, -2)
 
     def render_all(self):
-        # elev_list = [t*np.pi for t in (1/6, 1/6, 1/6, 5/12, 5/12, 5/12, 5/6, 5/6, 5/6)]
-        # azim_list = [t*np.pi for t in (5/3, 0, 2/3, 5/3, 0, 2/3, 5/3, 0, 2/3)]
-        # elev_list = [t * np.pi for t in (1 / 4, 1 / 4, 1 / 4, 1 / 2, 1 / 2, 1 / 2, 3 / 4, 3 / 4, 3 / 4)]
-        # azim_list = [t * np.pi for t in (5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3, 5 / 3, 0, 2 / 3)]
+        # elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+        # azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
 
         elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
         azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
-
+        
         res = self.render(elev_list, azim_list, 3, dim=self.render_size)
         img_res = self.reshape_image(res["image"])
         mask_res = self.reshape_image(res["mask"])
         return img_res, mask_res
     
-    def project(self, target):
+    def project_all(self, target):
         # self.init_texture_map()
         optimizer = torch.optim.Adam(self.parameters(), 1e-4)
         for _ in range(200):
@@ -248,5 +258,19 @@ class TexturedMeshModel(nn.Module):
             optimizer.zero_grad()
         # print()
         res, _ = self.render_all()
+        return res.detach()
+    
+    def project(self, target, elev, azim):
+        optimizer = torch.optim.Adam(self.parameters(), 1e-4)
+        for _ in range(200):
+            res = self.render([elev], [azim], 3, dim=self.render_size)
+            loss = torch.nn.functional.l1_loss(res["image"], target.detach())
+            # loss = torch.nn.functional.l1_loss(res["image"], target.detach())
+            # print(loss, end="\r")
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        # print()
+        res = self.render([elev], [azim], 3, dim=self.render_size)["image"]
         return res.detach()
 

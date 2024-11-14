@@ -186,18 +186,18 @@ class MyPipeline(StableDiffusionPipeline):
         if uv_model is not None:
             lr_list  = torch.linspace(1e-2, 1e-3, num_inference_steps)
 
-        for i, t in enumerate(tqdm(self.scheduler.timesteps, desc="DDIM Sampler")):
+        for i, t in enumerate(tqdm(self.scheduler.timesteps[-10:], desc="DDIM Sampler")):
             if ref_intermediate_latents is not None:
                 # note that the batch_size >= 2
                 latents_ref = ref_intermediate_latents[-1 - i]
                 _, latents_cur = latents.chunk(2)
 
-                mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
-                std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
-                mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
-                std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
+                # mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
+                # std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
+                # mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
+                # std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
 
-                latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
+                # latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
 
                 # if 900<t:
                 #     latents_cur = feat_adain(latents_cur, latents_ref)
@@ -263,7 +263,7 @@ class MyPipeline(StableDiffusionPipeline):
             save_image(image, "./output/proj/image_.png")
             if uv_model is not None and i%10 == 0:
                 mask = (depth[1:] != 0).int()    
-                res = uv_model.project(mask * image)
+                res = uv_model.project_all(mask * image)
                 save_image(res, "./output/proj/image_res.png")
 
                 # 优化 z
@@ -402,7 +402,7 @@ class MyPipeline(StableDiffusionPipeline):
 
         latents_list = [latents]
         pred_x0_list = [latents]
-        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps), desc="DDIM Inversion")):
+        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:10], desc="DDIM Inversion")):
             if guidance_scale > 1.0:
                 model_inputs = torch.cat([latents] * 2)
             else:

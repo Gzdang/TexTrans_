@@ -3,7 +3,7 @@ import re
 
 import torch
 import torch.nn.functional as F
-from diffusers.models.attention_processor import Attention
+from diffusers.models.attention_processor import Attention, AttnProcessor2_0
 from diffusers.utils.deprecation_utils import deprecate
 
 from typing import Optional
@@ -11,13 +11,23 @@ from typing import Optional
 from masactrl.utils import attn_adain
 
 
+def reset_attn(model, attn_init_dim=None):
+    unet = model.unet
+    attn_processor = unet.attn_processors
+
+    default_processor = AttnProcessor2_0()
+    for k, _ in attn_processor.items():
+        attn_processor[k] = default_processor
+
+    unet.set_attn_processor(attn_processor)
+
 def set_masactrl_attn(model, attn_init_dim=None):
     unet = model.unet
     attn_processor = unet.attn_processors
     pattern = "(up|mid)\w.*attn1"
 
     masactrl_processor = MasaProcessor(attn_init_dim)
-    for k, v in attn_processor.items():
+    for k, _ in attn_processor.items():
         if re.match(pattern, k) is not None:
             attn_processor[k] = masactrl_processor
 
