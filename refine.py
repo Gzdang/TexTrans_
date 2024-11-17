@@ -3,11 +3,13 @@ import numpy as np
 import cv2
 
 from PIL import Image, ImageFilter
+from torch import GradScaler
 from torchvision.utils import save_image
 
 from masactrl.attn_processor import set_masactrl_attn, reset_attn
 from mesh.unet.lipis import LPIPS
 from utils import *
+from torchvision.transforms.functional import gaussian_blur
 
 
 def sde(model, ref_image, tar_image, control, num_step, size):
@@ -41,7 +43,7 @@ def sde(model, ref_image, tar_image, control, num_step, size):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=2,
+        control_scale=0.75,
         base_resolution=size,
     )
 
@@ -70,27 +72,33 @@ def main(cfg):
     # load image
     cfg.mesh.texture_unet_path = "output/proj/unet.pth"
     ref_uv_model = load_uv_model(cfg.mesh, cfg.masa.ref_idx, render_size, False)
-    tar_uv_model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, True)
+    ref_uv_model.requires_grad_(False)
+    tar_uv_model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, True, device="cuda:1")
     # mask_model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, False, "temp/mask.png")
-    mask_model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, int(render_size * 1.5), False, "temp/_mask.png")
+    mask_model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, False, "temp/_mask.png")
 
-    base_mask = (mask_model.texture_map != 0).detach()
+    base_texture = tar_uv_model.get_texture().detach()
+    base_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
     last_mask = base_mask
 
-    elev_list = [t * np.pi for t in ( 3/4, 3/4, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/2,)]
-    azim_list = [t * np.pi for t in ( 4/3, 0, 2/3, 4/3, 0, 2/3, 1/3, 5/3, 1, )]
+    elev_list = [t * np.pi for t in (3/4, 1/2, 1/2, 1/2, 1/4, )]
+    azim_list = [t * np.pi for t in (0, 1, 1/3, 5/3, 0, )]
+    # elev_list = [t * np.pi for t in ( 1/2, 1/2, 1/2, 1/2, 1/2, 1/2, 1/2, 1/2)]
+    # azim_list = [t * np.pi for t in ( 0, 1/4, 1/2, 3/4, 1, 5/4, 3/2, 7/4, 0)]
 
-    base_images = tar_uv_model.render(elev_list, azim_list, 3, "black", render_size)
-    save_image(base_images["image"], "temp/base.png")
+    # base_images = tar_uv_model.render(elev_list, azim_list, 3, "black", render_size)
+    # save_image(base_images["image"], "temp/base.png")
 
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-4)
-    optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-1)
-    perceptual_loss = LPIPS(True).cuda().eval()
+    scaler = GradScaler()
+    perceptual_loss = LPIPS(True).to("cuda:1").eval()
 
     for elev, azim in zip(elev_list, azim_list):
+        mask_model.init_textures()
+        optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-1)
         for _ in range(10):
-            mask_out = mask_model.render([elev], [azim], 3, dim=int(render_size * 1.5))
-            loss = torch.nn.functional.l1_loss(mask_out["image"], mask_out["mask"].detach())
+            mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
+            loss = torch.nn.functional.l1_loss(mask_out["image"], mask_out["mask"].repeat(1, 3, 1, 1).detach())
             loss.backward()
             optim_mask.step()
             optim_mask.zero_grad()
@@ -101,8 +109,8 @@ def main(cfg):
 
         ref_image = (ref_render["image"] * 2 - 1).half()
         ref_depth = ref_render["depth"]
-        tar_image = (tar_render["image"] * 2 - 1).half()
-        tar_depth = tar_render["depth"]
+        tar_image = (tar_render["image"].detach() * 2 - 1).half().cpu().to(device)
+        tar_depth = tar_render["depth"].detach().cpu().to(device)
         control = {"depth": [ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
         # mean_ref = torch.mean(ref_depth, dim=(2,3), keepdim=True)
         # std_ref = torch.std(ref_depth, dim=(2,3), keepdim=True)
@@ -115,34 +123,55 @@ def main(cfg):
         save_image(ref_render["image"], "temp/ref.png")
         save_image(ref_depth, "temp/ref_depth.png")
 
-        target = sde(model, ref_image, tar_image, control, cfg.model.num_step, render_size).detach()
-        # save_image(target, "temp/before.png")
+        target = sde(model, ref_image, tar_image, control, cfg.model.num_step, render_size).detach().cpu().to("cuda:1")
+        save_image(target, "temp/target.png")
         # image_transfer(target, base_images["image"][i:i+1])
         # save_image(target, "temp/after.png")
 
 
-        change_mask = ((mask_model.texture_map != 0) != last_mask).int().detach()
+        proj_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
+        change_mask = (proj_mask != base_mask).int().detach()
+        # change_mask = (proj_mask != last_mask).int().detach()
         save_image(change_mask.float(), "temp/change_mask.png")
+        _change_mask = gaussian_blur(change_mask.float(), 15, 9)
+        change_mask = (_change_mask>0.2).int().detach()
+        unchange_mask = (_change_mask<0.8).int().detach()
+        save_image(change_mask.float(), "temp/_change_mask.png")
+        save_image(unchange_mask.float(), "temp/unchange_mask.png")
         last_texture = tar_uv_model.get_texture().detach()
         save_image(last_texture, "temp/last_texture.png")
 
-        for i in range(200):
-            texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size)
-            # loss = torch.nn.functional.l1_loss(texture_out["image"], target.detach())
-            loss = perceptual_loss(texture_out["image"], target.detach())[0][0][0][0]
-            loss += torch.nn.functional.l1_loss((1-base_mask.int())*texture_out["texture_map"], (1-base_mask.int())*last_texture.detach())
-            print(f"{i}: {loss}", end="\r")
-            loss.backward()
-            optim_texture.step()
-            optim_texture.zero_grad()
+        # blur_texture = gaussian_blur(last_texture,9,9)
 
-        last_mask = mask_model.texture_map != 0
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[200, 400], gamma=0.5)
+        for i in range(500):
+            optim_texture.zero_grad()
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size)
+                # loss = torch.nn.functional.l1_loss(texture_out["image"], target.detach())
+                pl = perceptual_loss(texture_out["image"], target[-1:])[0][0][0][0]
+                ll = torch.nn.functional.l1_loss(texture_out["image"], target[-1:])
+                # blured = gaussian_blur(texture_out["texture_map"],9,9)
+                cl = torch.nn.functional.l1_loss(change_mask*texture_out["texture_map"], change_mask*last_texture)
+                ul = 5 * torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)
+                # loss = pl + cl + ul
+                loss = pl + ll + ul
+            print(f"{i} pl:{pl}, ll:{ll}, cl:{cl}, ul:{ul}, loss:{loss}", end="\r")
+            scaler.scale(loss).backward()
+            scaler.step(optim_texture)
+            scaler.update()
+            scheduler.step()
+
+        last_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
         save_image(texture_out["image"], "./temp/mesa_res.png")
         save_image(tar_uv_model.texture_map, "./temp/texture.png")
+    with torch.no_grad():
+        res, _ = tar_uv_model.render_all()
+        save_image(res, "./temp/image_all.png")
 
 
 if __name__ == "__main__":
-    cfg = OmegaConf.load("configs/config_h.yaml")
+    cfg = OmegaConf.load("configs/config_refine.yaml")
     main(cfg)
 
     texture = np.array(Image.open("temp/texture.png"))

@@ -151,7 +151,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             control["depth"] = depth.to(self.controlnet.dtype)
 
         self.scheduler.set_timesteps(num_inference_steps)
-        for i, t in enumerate(tqdm(self.scheduler.timesteps, desc="DDIM Sampler")):
+        for i, t in enumerate(tqdm(self.scheduler.timesteps[-40:], desc="DDIM Sampler")):
             
             assert ref_intermediate_latents is not None
 
@@ -282,7 +282,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         # print("attributes: ", self.scheduler.__dict__)
         latents_list = [latents]
         pred_x0_list = [latents]
-        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps), desc="DDIM Inversion")):
+        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:40], desc="DDIM Inversion")):
             model_inputs = latents
 
             added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}

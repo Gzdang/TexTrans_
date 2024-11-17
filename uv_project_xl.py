@@ -41,7 +41,7 @@ def main(cfg):
     perceptual_loss = LPIPS(True).cuda().eval()
     optimizer = torch.optim.AdamW(model.parameters(), 1e-4)
     scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[600, 900], gamma=0.5)
-    for i in range(1000):
+    for i in range(100):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
@@ -55,10 +55,10 @@ def main(cfg):
         # save_image(image, "output/proj/test.png")
 
     res, res_ = model.render_all()
-    save_image(res, "./output/proj/image_l.png")
-    save_image(model.texture_map, "./output/proj/texture_l.png")
-    model.save_texture_unet("output/proj/unet_l.pth")
+    save_image(res, "./output/proj/image.png")
+    save_image(model.texture_map, "./output/proj/texture.png")
+    model.save_texture_unet("output/proj/unet.pth")
 
 if __name__ == "__main__":
-    cfg = OmegaConf.load("configs/config_h.yaml")
+    cfg = OmegaConf.load("configs/config_xl.yaml")
     main(cfg)

@@ -63,7 +63,7 @@ class MyPipeline(StableDiffusionPipeline):
         return alpha_prod_t_prev**0.5 * x_0 + (1 - alpha_prod_t_prev) ** 0.5 * noise_pred
 
     def image2latent(self, image):
-        DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        DEVICE = self.device
         if isinstance(image, (Image.Image, PngImagePlugin.PngImageFile)):
             image = np.array(image)
             image = 2 * (torch.from_numpy(image).float() / 255) - 1
@@ -121,7 +121,7 @@ class MyPipeline(StableDiffusionPipeline):
         uv_model=None,
         **kwds,
     ):
-        DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        DEVICE = self.device
         if isinstance(prompt, list):
             batch_size = len(prompt)
         elif isinstance(prompt, str):
@@ -186,18 +186,18 @@ class MyPipeline(StableDiffusionPipeline):
         if uv_model is not None:
             lr_list  = torch.linspace(1e-2, 1e-3, num_inference_steps)
 
-        for i, t in enumerate(tqdm(self.scheduler.timesteps[-10:], desc="DDIM Sampler")):
+        for i, t in enumerate(tqdm(self.scheduler.timesteps, desc="DDIM Sampler")):
             if ref_intermediate_latents is not None:
                 # note that the batch_size >= 2
                 latents_ref = ref_intermediate_latents[-1 - i]
                 _, latents_cur = latents.chunk(2)
 
-                # mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
-                # std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
-                # mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
-                # std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
+                mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
+                std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
+                mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
+                std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
 
-                # latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
+                latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
 
                 # if 900<t:
                 #     latents_cur = feat_adain(latents_cur, latents_ref)
@@ -259,8 +259,8 @@ class MyPipeline(StableDiffusionPipeline):
             # latents, pred_x0 = self.step(noise_pred.repeat(2,1,1,1), t, latents)
 
             latents_, pred_x0 = self.step(noise_pred, t, latents)
-            image = self.latent2image(pred_x0[1:], return_type="pt").detach()
-            save_image(image, "./output/proj/image_.png")
+            # image = self.latent2image(pred_x0[1:], return_type="pt").detach()
+            # save_image(image, "./output/proj/image_.png")
             if uv_model is not None and i%10 == 0:
                 mask = (depth[1:] != 0).int()    
                 res = uv_model.project_all(mask * image)
@@ -340,7 +340,7 @@ class MyPipeline(StableDiffusionPipeline):
         """
         invert a real image into noise map with determinisc DDIM inversion
         """
-        DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        DEVICE = self.device
         batch_size = 1
         if isinstance(image, torch.Tensor):
             batch_size = image.shape[0]
@@ -402,7 +402,7 @@ class MyPipeline(StableDiffusionPipeline):
 
         latents_list = [latents]
         pred_x0_list = [latents]
-        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:10], desc="DDIM Inversion")):
+        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps), desc="DDIM Inversion")):
             if guidance_scale > 1.0:
                 model_inputs = torch.cat([latents] * 2)
             else:

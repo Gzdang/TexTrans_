@@ -17,7 +17,7 @@ def main(cfg):
     control = {"depth": [ref_depth, tar_depth]}
 
     # load obj
-    init_texture = "output/proj/texture.png"
+    init_texture = "output/proj/texture_l.png"
     tar_uv_model = load_uv_model(cfg.mesh, masa_cfg.tar_idx, render_size, False, init_texture)
 
     image, _ = tar_uv_model.render_all()
@@ -38,8 +38,6 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
-        control_scale=0.75,
-        control={"depth": ref_depth}
     )
 
     # tar_image_ = image_transfer(tar_img, ref_img)
@@ -49,7 +47,6 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
-        # control={"depth": tar_depth}
     )
     start_code = start_code.expand(len(prompts), -1, -1, -1)
 
@@ -61,9 +58,8 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=0.75,
+        control_scale=2,
         base_resolution=img_size,
-        # uv_model = tar_uv_model
     )
 
     # save the synthesized image

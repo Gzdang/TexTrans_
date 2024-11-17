@@ -56,7 +56,7 @@ def main(cfg):
         control=control,
         control_scale=2,
         base_resolution=img_size,
-        uv_model = tar_uv_model
+        # uv_model = tar_uv_model
     )
 
     # save the synthesized image

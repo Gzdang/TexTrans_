@@ -12,6 +12,7 @@ from PIL import Image
 from mesh.mesh import Mesh
 from mesh.render import Render
 from mesh.unet.skip import skip
+from torchvision.utils import save_image
 
 class TexturedMeshModel(nn.Module):
     def __init__(
@@ -74,12 +75,12 @@ class TexturedMeshModel(nn.Module):
                 act_fun="LeakyReLU",
             ).to(self.device)
             if "texture_unet_path" in self.opt:
-                state_dict = torch.load(self.opt.texture_unet_path, weights_only=True)
-                self.texture_seed = (state_dict["seed"])
+                state_dict = torch.load(self.opt.texture_unet_path, weights_only=True, map_location=torch.device(self.device))
+                self.texture_seed = state_dict["seed"]
                 self.texture_unet.load_state_dict(state_dict["unet"])
             self.texture_map = None
         else:
-            self.texture_map = self.init_textures()
+            self.init_textures()
 
         # 初始化模型uv坐标
         self.vt, self.ft = self.init_texture_map()
@@ -101,16 +102,16 @@ class TexturedMeshModel(nn.Module):
                     )
                 )
                 .permute(2, 0, 1)
-                .cuda()
+                .to(self.device)
                 .unsqueeze(0)
                 / 255.0
             )
 
         else:
-            texture = torch.ones(1, self.num_features, self.texture_resolution, self.texture_resolution).cuda()
-            # texture = torch.randn(1, self.num_features, self.texture_resolution, self.texture_resolution).cuda()
+            texture = torch.ones(1, self.num_features, self.texture_resolution, self.texture_resolution).to(self.device)
+            # texture = torch.randn(1, self.num_features, self.texture_resolution, self.texture_resolution).to(self.device)
 
-        return nn.Parameter(texture)
+        self.texture_map = nn.Parameter(texture)
 
     def init_texture_map(self):
         cache_path = self.cache_path
@@ -127,12 +128,12 @@ class TexturedMeshModel(nn.Module):
             and self.mesh.face_uvs.min() > -1
         ):
             # logger.info('Mesh includes UV map')
-            vt = self.mesh.vertex_uvs.cuda()
-            ft = self.mesh.face_uvs.cuda()
+            vt = self.mesh.vertex_uvs.to(self.device)
+            ft = self.mesh.face_uvs.to(self.device)
         elif cache_exists_flag:
             # logger.info(f'running cached UV maps from {vt_cache}')
-            vt = torch.load(vt_cache).cuda()
-            ft = torch.load(ft_cache).cuda()
+            vt = torch.load(vt_cache).to(self.device)
+            ft = torch.load(ft_cache).to(self.device)
         else:
             # logger.info(f'running xatlas to unwrap UVs for mesh')
             # unwrap uvs
@@ -145,8 +146,8 @@ class TexturedMeshModel(nn.Module):
             atlas.generate(chart_options=chart_options)
             vmapping, ft_np, vt_np = atlas[0]  # [N], [M, 3], [N, 2]
 
-            vt = torch.from_numpy(vt_np.astype(np.float32)).float().cuda()
-            ft = torch.from_numpy(ft_np.astype(np.int64)).int().cuda()
+            vt = torch.from_numpy(vt_np.astype(np.float32)).float().to(self.device)
+            ft = torch.from_numpy(ft_np.astype(np.int64)).int().to(self.device)
             if cache_path is not None:
                 os.makedirs(cache_path, exist_ok=True)
                 torch.save(vt.cpu(), vt_cache)
@@ -186,27 +187,27 @@ class TexturedMeshModel(nn.Module):
 
         if self.use_unet:
             texture_img = self.texture_unet(self.texture_seed)
-            self.texture_map = texture_img
+            self.texture_map = texture_img.detach()
         else:
             texture_img = self.texture_map
 
         # render_cache = self.render_cache
         render_cache = None
 
-        images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(
-            augmented_vertices,
-            self.mesh.faces,
-            self.face_attributes,
-            texture_img,
-            elev=theta,
-            azim=phi,
-            radius=radius,
-            look_at_height=self.dy,
-            render_cache=render_cache,
-            dims=(dim, dim),
-        )
-
-        self.render_cache = render_cache
+        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
+            images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(
+                augmented_vertices,
+                self.mesh.faces,
+                self.face_attributes,
+                texture_img.float(),
+                elev=theta,
+                azim=phi,
+                radius=radius,
+                look_at_height=self.dy,
+                render_cache=render_cache,
+                dims=(dim, dim),
+            )
+        # self.render_cache = render_cache
         mask = mask.detach()
 
         if background != None:
