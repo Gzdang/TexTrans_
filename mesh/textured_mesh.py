@@ -11,6 +11,7 @@ from PIL import Image
 
 from mesh.mesh import Mesh
 from mesh.render import Render
+from mesh.unet.lipis import LPIPS
 from mesh.unet.skip import skip
 from torchvision.utils import save_image
 
@@ -86,6 +87,8 @@ class TexturedMeshModel(nn.Module):
         self.vt, self.ft = self.init_texture_map()
         self.face_attributes = self.mesh.face_uv_matrix
         self.xyz_attributes = self.mesh.face_xyz_matrix
+
+        self.perceptual_loss = LPIPS(True).cuda().eval()
 
     def init_meshes(self):
         mesh = Mesh(self.opt.shape_path, self.device)
@@ -250,13 +253,16 @@ class TexturedMeshModel(nn.Module):
     def project_all(self, target):
         # self.init_texture_map()
         optimizer = torch.optim.Adam(self.parameters(), 1e-4)
-        for _ in range(200):
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 700], gamma=0.5)
+        for _ in range(800):
             image, _ = self.render_all()
             loss = torch.nn.functional.l1_loss(image, target.detach())
+            loss += self.perceptual_loss(target, image)[0][0][0][0]
             # print(loss, end="\r")
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
+            scheduler.step()
         # print()
         res, _ = self.render_all()
         return res.detach()

@@ -31,7 +31,6 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
-        # control={"depth": ref_depth}
     )
 
     # tar_image_ = image_transfer(tar_img, ref_img)

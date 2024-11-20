@@ -98,6 +98,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         ref_intermediate_latents=None,
         control={},
         control_scale=1,
+        strength=1,
         **kwds,
     ):
         DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -151,18 +152,20 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             control["depth"] = depth.to(self.controlnet.dtype)
 
         self.scheduler.set_timesteps(num_inference_steps)
-        for i, t in enumerate(tqdm(self.scheduler.timesteps[-40:], desc="DDIM Sampler")):
+        start_idx = int(num_inference_steps * strength)
+        for i, t in enumerate(tqdm(self.scheduler.timesteps[-start_idx:], desc="DDIM Sampler")):
             
             assert ref_intermediate_latents is not None
 
             latents_ref = ref_intermediate_latents[-1 - i]
             _, latents_cur = latents.chunk(2)
 
-            mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
-            std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
-            mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
-            std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
-            latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
+            # mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
+            # std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
+            # mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
+            # std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
+            # latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
+
             latents = torch.cat([latents_ref, latents_cur])
 
             model_inputs = latents
@@ -219,6 +222,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         control={},
         control_scale=1,
         base_resolution=512,
+        strength=1,
         **kwds,
     ):
         """
@@ -278,11 +282,12 @@ class MyPipelineXL(StableDiffusionXLPipeline):
 
         # interative sampling
         self.scheduler.set_timesteps(num_inference_steps)
+        start_idx = int(num_inference_steps * strength)
         print("Valid timesteps: ", reversed(self.scheduler.timesteps))
         # print("attributes: ", self.scheduler.__dict__)
         latents_list = [latents]
         pred_x0_list = [latents]
-        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:40], desc="DDIM Inversion")):
+        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:start_idx], desc="DDIM Inversion")):
             model_inputs = latents
 
             added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}

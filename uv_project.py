@@ -40,8 +40,8 @@ def main(cfg):
 
     perceptual_loss = LPIPS(True).cuda().eval()
     optimizer = torch.optim.AdamW(model.parameters(), 1e-4)
-    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[600, 900], gamma=0.5)
-    for i in range(1000):
+    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 700], gamma=0.5)
+    for i in range(800):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]

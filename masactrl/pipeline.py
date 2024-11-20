@@ -9,7 +9,6 @@ from diffusers import StableDiffusionPipeline
 from diffusers.image_processor import VaeImageProcessor
 from torchvision.utils import save_image
 from torchvision.transforms.v2 import Resize
-from torch.cuda.amp.grad_scaler import GradScaler
 
 
 class MyPipeline(StableDiffusionPipeline):
@@ -119,6 +118,7 @@ class MyPipeline(StableDiffusionPipeline):
         control={},
         control_scale=1,
         uv_model=None,
+        strength=1,
         **kwds,
     ):
         DEVICE = self.device
@@ -180,29 +180,23 @@ class MyPipeline(StableDiffusionPipeline):
 
         # iterative sampling
         self.scheduler.set_timesteps(num_inference_steps)
+        start_idx = int(num_inference_steps * strength)
         latents_list = [latents]
         pred_x0_list = [latents]
 
-        if uv_model is not None:
-            lr_list  = torch.linspace(1e-2, 1e-3, num_inference_steps)
-
-        for i, t in enumerate(tqdm(self.scheduler.timesteps, desc="DDIM Sampler")):
+        for i, t in enumerate(tqdm(self.scheduler.timesteps[-start_idx:], desc="DDIM Sampler")):
             if ref_intermediate_latents is not None:
                 # note that the batch_size >= 2
                 latents_ref = ref_intermediate_latents[-1 - i]
                 _, latents_cur = latents.chunk(2)
-
                 mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
                 std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
                 mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
                 std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
-
                 latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
-
                 # if 900<t:
                 #     latents_cur = feat_adain(latents_cur, latents_ref)
                 latents = torch.cat([latents_ref, latents_cur])
-
             if guidance_scale > 1.0:
                 model_inputs = torch.cat([latents] * 2)
             else:
@@ -210,7 +204,6 @@ class MyPipeline(StableDiffusionPipeline):
             if unconditioning is not None and isinstance(unconditioning, list):
                 _, text_embeddings = text_embeddings.chunk(2)
                 text_embeddings = torch.cat([unconditioning[i].expand(*text_embeddings.shape), text_embeddings])
-
             @torch.no_grad()
             def get_control():
                 down_block_res_samples = None
@@ -236,10 +229,8 @@ class MyPipeline(StableDiffusionPipeline):
                         mid_block_res_sample += mid_block_depth
                 return down_block_res_samples, mid_block_res_sample
             down_block_res_samples, mid_block_res_sample = get_control()
-
             # down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2], t[3]]) for t in down_block_res_samples]
             # mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2], mid_block_res_sample[3]])
-
             @torch.no_grad()
             def get_noise():
                 return self.unet(
@@ -250,36 +241,32 @@ class MyPipeline(StableDiffusionPipeline):
                     mid_block_additional_residual=mid_block_res_sample,
                 ).sample
             noise_pred = get_noise()
-
             if guidance_scale > 1.0:
                 noise_pred_uncon, noise_pred_con = noise_pred[1:2], noise_pred[-1:]
                 # noise_pred_uncon, noise_pred_con = noise_pred.chunk(2, dim=0)
                 noise_pred = noise_pred_uncon + guidance_scale * (noise_pred_con - noise_pred_uncon)
             # compute the previous noise sample x_t -> x_t-1
             # latents, pred_x0 = self.step(noise_pred.repeat(2,1,1,1), t, latents)
-
             latents_, pred_x0 = self.step(noise_pred, t, latents)
-            # image = self.latent2image(pred_x0[1:], return_type="pt").detach()
+            # image = self.latent2image(pred_x0, return_type="pt").detach()
             # save_image(image, "./output/proj/image_.png")
-            if uv_model is not None and i%10 == 0:
+            # image = image[1:]
+            if uv_model is not None and (i>30 and i%5 == 0):
                 mask = (depth[1:] != 0).int()    
                 res = uv_model.project_all(mask * image)
                 save_image(res, "./output/proj/image_res.png")
-
                 # 优化 z
                 # _latent = pred_x0[1:].clone().float().detach()
                 _latent = latents[1:].clone().float().detach()
                 _latent.requires_grad_(True)
-                optim = torch.optim.AdamW([_latent], lr_list[i])
-                # optim = torch.optim.AdamW([_latent], 5e-3)
-                scaler = GradScaler()
+                optim = torch.optim.AdamW([_latent], 1e-2)
+                scaler = torch.amp.GradScaler()
                 out = None
                 _latent_next = None
-                for _ in range(100):
+                for _ in range(200):
                     optim.zero_grad()
                     with torch.autocast(device_type='cuda', dtype=torch.float16):
                         _latent_input = torch.cat([latents[:1].detach(), _latent])
-                        
                         down_block_depth, mid_block_depth = self.controlnet(
                             _latent_input, t,
                             encoder_hidden_states=text_embeddings,
@@ -295,13 +282,11 @@ class MyPipeline(StableDiffusionPipeline):
                         ).sample
                         _latent_next, _x0 = self.step(_n, t, _latent_input)
                         # _latent_next, _x0 = self.step(_n, t, latents.detach())
-
                         out = self.latent2image(_x0[1:], return_type="pt")
                         out = out*mask
                         loss = torch.nn.functional.l1_loss(out, res)
                         # loss += perceptual_loss(out, res)[0][0][0][0]
                         print(loss)
-
                     scaler.scale(loss).backward()
                     scaler.step(optim)
                     scaler.update()
@@ -310,7 +295,6 @@ class MyPipeline(StableDiffusionPipeline):
                 latents = _latent_next.detach().half()
             else:
                 latents = latents_
-
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
 
@@ -335,6 +319,7 @@ class MyPipeline(StableDiffusionPipeline):
         style_image=None,
         base_resolution=512,
         is_combine=False,
+        strength=1,
         **kwds,
     ):
         """
@@ -399,10 +384,11 @@ class MyPipeline(StableDiffusionPipeline):
 
         # interative sampling
         self.scheduler.set_timesteps(num_inference_steps)
+        start_idx = int(num_inference_steps * strength)
 
         latents_list = [latents]
         pred_x0_list = [latents]
-        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps), desc="DDIM Inversion")):
+        for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:start_idx], desc="DDIM Inversion")):
             if guidance_scale > 1.0:
                 model_inputs = torch.cat([latents] * 2)
             else:

@@ -15,15 +15,17 @@ from torchvision.transforms.functional import gaussian_blur
 def sde(model, ref_image, tar_image, control, num_step, size):
     source_prompt, target_prompt = "", ""
     prompts = [source_prompt, target_prompt]
+    strength = 0.6
 
     reset_attn(model)
-    _, latents_list = model.invert(
+    style_code, latents_list = model.invert(
         ref_image,
         source_prompt,
         guidance_scale=1,
         num_inference_steps=num_step,
         return_intermediates=True,
         base_resolution=size,
+        strength = strength
     )
     start_code, _ = model.invert(
         tar_image,
@@ -32,8 +34,10 @@ def sde(model, ref_image, tar_image, control, num_step, size):
         num_inference_steps=num_step,
         return_intermediates=True,
         base_resolution=size,
+        strength = strength
     )
     start_code = start_code.expand(len(prompts), -1, -1, -1)
+    # start_code = style_code.expand(len(prompts), -1, -1, -1)
 
     set_masactrl_attn(model)
     image_masactrl = model(
@@ -45,6 +49,7 @@ def sde(model, ref_image, tar_image, control, num_step, size):
         control=control,
         control_scale=0.75,
         base_resolution=size,
+        strength = strength
     )
 
     return image_masactrl
@@ -81,15 +86,15 @@ def main(cfg):
     base_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
     last_mask = base_mask
 
+    # elev_list = [t * np.pi for t in (1/2, 1/2, 1/4, )]
+    # azim_list = [t * np.pi for t in (1/3, 5/3, 0, )]
     elev_list = [t * np.pi for t in (3/4, 1/2, 1/2, 1/2, 1/4, )]
     azim_list = [t * np.pi for t in (0, 1, 1/3, 5/3, 0, )]
-    # elev_list = [t * np.pi for t in ( 1/2, 1/2, 1/2, 1/2, 1/2, 1/2, 1/2, 1/2)]
-    # azim_list = [t * np.pi for t in ( 0, 1/4, 1/2, 3/4, 1, 5/4, 3/2, 7/4, 0)]
 
     # base_images = tar_uv_model.render(elev_list, azim_list, 3, "black", render_size)
     # save_image(base_images["image"], "temp/base.png")
 
-    optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-4)
+    optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
     perceptual_loss = LPIPS(True).to("cuda:1").eval()
 
@@ -143,8 +148,8 @@ def main(cfg):
 
         # blur_texture = gaussian_blur(last_texture,9,9)
 
-        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[200, 400], gamma=0.5)
-        for i in range(500):
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[600, 800], gamma=0.5)
+        for i in range(1000):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size)
@@ -153,9 +158,8 @@ def main(cfg):
                 ll = torch.nn.functional.l1_loss(texture_out["image"], target[-1:])
                 # blured = gaussian_blur(texture_out["texture_map"],9,9)
                 cl = torch.nn.functional.l1_loss(change_mask*texture_out["texture_map"], change_mask*last_texture)
-                ul = 5 * torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)
-                # loss = pl + cl + ul
-                loss = pl + ll + ul
+                ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)
+                loss = pl + cl + ul
             print(f"{i} pl:{pl}, ll:{ll}, cl:{cl}, ul:{ul}, loss:{loss}", end="\r")
             scaler.scale(loss).backward()
             scaler.step(optim_texture)

@@ -29,7 +29,7 @@ def main(cfg):
     target_prompt = ""
     prompts = [ref_prompt, target_prompt]
 
-    num_step = 50
+    num_step = cfg.model.num_step
 
     # invert the source image
     style_code, latents_list = model.invert(
@@ -38,6 +38,7 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
+        strength=0.6
     )
 
     # tar_image_ = image_transfer(tar_img, ref_img)
@@ -47,6 +48,7 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
+        strength=0.6
     )
     start_code = start_code.expand(len(prompts), -1, -1, -1)
 
@@ -58,8 +60,9 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=2,
+        control_scale=0.75,
         base_resolution=img_size,
+        strength=0.6
     )
 
     # save the synthesized image

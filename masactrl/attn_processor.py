@@ -124,7 +124,7 @@ class MasaProcessor:
             key = attn.norm_k(key)
 
         # masactrl
-        # query = attn_adain(query)
+        query = attn_adain(query)
         key = key.chunk(2)[0].repeat(2, 1, 1, 1)
         value = value.chunk(2)[0].repeat(2, 1, 1, 1)
 
