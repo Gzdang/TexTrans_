@@ -88,7 +88,8 @@ class TexturedMeshModel(nn.Module):
         self.face_attributes = self.mesh.face_uv_matrix
         self.xyz_attributes = self.mesh.face_xyz_matrix
 
-        self.perceptual_loss = LPIPS(True).cuda().eval()
+        if self.use_unet:
+            self.perceptual_loss = LPIPS(True).to(self.device).eval()
 
     def init_meshes(self):
         mesh = Mesh(self.opt.shape_path, self.device)

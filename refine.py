@@ -14,7 +14,7 @@ from torchvision.transforms.functional import gaussian_blur
 
 def sde(model, ref_image, tar_image, control, num_step, size):
     source_prompt, target_prompt = "", ""
-    prompts = [source_prompt, target_prompt]
+    prompts = [source_prompt, target_prompt] 
     strength = 0.6
 
     reset_attn(model)
@@ -96,7 +96,7 @@ def main(cfg):
 
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
-    perceptual_loss = LPIPS(True).to("cuda:1").eval()
+    perceptual_loss = tar_uv_model.perceptual_loss
 
     for elev, azim in zip(elev_list, azim_list):
         mask_model.init_textures()
@@ -159,7 +159,7 @@ def main(cfg):
                 # blured = gaussian_blur(texture_out["texture_map"],9,9)
                 cl = torch.nn.functional.l1_loss(change_mask*texture_out["texture_map"], change_mask*last_texture)
                 ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)
-                loss = pl + cl + ul
+                loss = pl + ll + cl + ul
             print(f"{i} pl:{pl}, ll:{ll}, cl:{cl}, ul:{ul}, loss:{loss}", end="\r")
             scaler.scale(loss).backward()
             scaler.step(optim_texture)
