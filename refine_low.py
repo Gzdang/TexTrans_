@@ -15,7 +15,7 @@ from torchvision.transforms.functional import gaussian_blur
 def sde(model, ref_image, tar_image, control, num_step, size):
     source_prompt, target_prompt = "", ""
     prompts = [source_prompt, target_prompt] 
-    strength = 0.6
+    strength = 0.8
 
     reset_attn(model)
     style_code, latents_list = model.invert(
@@ -47,7 +47,7 @@ def sde(model, ref_image, tar_image, control, num_step, size):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=0.5,
+        control_scale=0.75,
         base_resolution=size,
         strength = strength
     )
@@ -69,7 +69,8 @@ def image_transfer(tar_image, style_image):
 
 def main(cfg):
     device = cfg.device
-    render_size = 1024
+    masa_cfg = cfg.masa
+    render_size = masa_cfg.size
 
     model = load_model(cfg.model, device)
 
@@ -173,7 +174,7 @@ def main(cfg):
 
 
 if __name__ == "__main__":
-    cfg = load_confg("configs", "config_refine.yaml")
+    cfg = load_confg("configs", "config_upscale.yaml")
     main(cfg)
 
     texture = np.array(Image.open("temp/texture.png"))

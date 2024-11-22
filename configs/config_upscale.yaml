@@ -10,13 +10,11 @@ model:
   base_model: "./resource/sdxl_base"
   controlnet: "./resource/sdxl_controlnet"
   image_encoder: "./resource/clip14" 
-masa:
-  ref_idx: 22
-  tar_idx: 5
-  size: 1024
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1
   dy: 0
+  render_size: 384
   texture_resolution: 512
   texture_interpolation_mode: "bilinear"
+  texture_unet_path: "output/unet_l.pth"

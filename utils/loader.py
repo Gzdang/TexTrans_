@@ -15,6 +15,17 @@ from diffusers.image_processor import VaeImageProcessor
 from transformers import CLIPImageProcessor
 
 
+def load_confg(base_path, cfg_name):
+    cfg_dir = os.path.join(base_path, cfg_name)
+    if not os.path.exists(cfg_dir):
+        raise FileNotFoundError()
+    cfg = OmegaConf.load(cfg_dir)
+    if os.path.exists(os.path.join(base_path, "global.yaml")):
+        cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(base_path, "global.yaml")))
+
+    return cfg
+
+
 def load_model(cfg, device):
     scheduler = DDIMScheduler(
         beta_start=0.00085,
@@ -23,7 +34,7 @@ def load_model(cfg, device):
         clip_sample=False,
         set_alpha_to_one=False,
     )
-    if "type" in cfg and cfg.type == "sdxl":
+    if cfg.get("type", "sd15") == "sdxl":
         model = MyPipelineXL.from_pretrained(cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16).to(device)
         model.vae.to(dtype=torch.float32)
         controlnet = ControlNetModel.from_pretrained(cfg.controlnet, variant="fp16", torch_dtype=torch.float16).eval()

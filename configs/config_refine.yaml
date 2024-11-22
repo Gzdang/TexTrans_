@@ -6,17 +6,15 @@ dataset:
   path: "./dataset/512_new"
 model:
   num_step: 50
-  base_model: "./resource/sd15"
-  controlnet: "./resource/controlnet_depth"
+  type: "sdxl"
+  base_model: "./resource/sdxl_base"
+  controlnet: "./resource/sdxl_controlnet"
   image_encoder: "./resource/clip14" 
-masa:
-  type: "sd15"
-  ref_idx: 22
-  tar_idx: 5
-  size: 384
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1
   dy: 0
-  texture_resolution: 512
+  render_size: 512
+  texture_resolution: 1024
   texture_interpolation_mode: "bilinear"
+  texture_unet_path: "output/unet_h.pth"

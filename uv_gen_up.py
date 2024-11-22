@@ -7,18 +7,18 @@ from utils import *
 
 def main(cfg):
     device = cfg.device
-    masa_cfg = cfg.masa
-    render_size = masa_cfg.size
+    mesh_cfg = cfg.mesh
+    render_size = mesh_cfg.render_size
     img_size = render_size * 3
 
     model = load_model(cfg.model, device)
 
-    ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, masa_cfg.ref_idx, masa_cfg.tar_idx, img_size)
+    ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, cfg.ref_idx, cfg.tar_idx, img_size)
     control = {"depth": [ref_depth, tar_depth]}
 
     # load obj
     init_texture = "output/proj/texture_l.png"
-    tar_uv_model = load_uv_model(cfg.mesh, masa_cfg.tar_idx, render_size, False, init_texture)
+    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, False, init_texture)
 
     image, _ = tar_uv_model.render_all()
     save_image(image, "render.png")
@@ -70,6 +70,6 @@ def main(cfg):
     save_res(ref_img, tar_img, masa_imgs[-1:], device)
 
 if __name__ == "__main__":
-    cfg = OmegaConf.load("configs/config_h.yaml")
+    cfg = load_confg("configs", "config_upscale.yaml")
     main(cfg)
 

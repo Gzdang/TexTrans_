@@ -16,8 +16,6 @@ class MyPipeline(StableDiffusionPipeline):
         """
         Inverse sampling for DDIM Inversion
         """
-        if verbose:
-            print("timestep: ", timestep)
         next_step = timestep
         timestep = min(timestep - self.scheduler.config.num_train_timesteps // self.scheduler.num_inference_steps, 999)
         alpha_prod_t = self.scheduler.alphas_cumprod[timestep] if timestep >= 0 else self.scheduler.final_alpha_cumprod

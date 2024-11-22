@@ -1,4 +1,3 @@
-output_dir: output
 dtype: fp16
 device: cuda
 mixed_precision: fp16
@@ -9,13 +8,10 @@ model:
   base_model: "./resource/sd15"
   controlnet: "./resource/controlnet_depth"
   image_encoder: "./resource/clip14" 
-masa:
-  ref_idx: 22
-  tar_idx: 5
-  size: 192
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1
   dy: 0
+  render_size: 192
   texture_resolution: 256
   texture_interpolation_mode: "bilinear"

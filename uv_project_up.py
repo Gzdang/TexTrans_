@@ -8,7 +8,7 @@ from torchvision.utils import save_image
 
 from mesh.textured_mesh import TexturedMeshModel
 from mesh.unet.lipis import LPIPS
-from utils.loader import load_uv_model, load_uv_mask
+from utils.loader import *
 
 
 def reshape_image(image_batch):
@@ -20,11 +20,11 @@ def reshape_image(image_batch):
 
 
 def main(cfg):
-    render_size = cfg.masa.size
+    render_size = cfg.mesh.render_size
     img_size = render_size * 3
     
-    model = load_uv_model(cfg.mesh, cfg.masa.tar_idx, render_size, True)
-    uv_mask = load_uv_mask(cfg.mesh, cfg.masa.tar_idx)
+    model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, True)
+    uv_mask = load_uv_mask(cfg.mesh, cfg.tar_idx)
 
     out_dir = "./output/gen"
     sample_count = len(os.listdir(out_dir))
@@ -45,7 +45,7 @@ def main(cfg):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
-        print(loss)
+        print(f"{i}: {loss}", end="\r" if i < 799 else "\n")
 
         loss.backward()
         optimizer.step()
@@ -55,10 +55,10 @@ def main(cfg):
         # save_image(image, "output/proj/test.png")
 
     res, res_ = model.render_all()
-    save_image(res, "./output/proj/image.png")
-    save_image(model.texture_map, "./output/proj/texture.png")
-    model.save_texture_unet("output/proj/unet.pth")
+    save_image(res, "./output/image_h.png")
+    save_image(model.texture_map, "./output/texture_h.png")
+    model.save_texture_unet("output/unet_h.pth")
 
 if __name__ == "__main__":
-    cfg = OmegaConf.load("configs/config_xl.yaml")
+    cfg = load_confg("configs", "config_refine.yaml")
     main(cfg)

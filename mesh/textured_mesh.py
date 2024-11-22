@@ -75,7 +75,7 @@ class TexturedMeshModel(nn.Module):
                 pad="reflection",
                 act_fun="LeakyReLU",
             ).to(self.device)
-            if "texture_unet_path" in self.opt:
+            if "texture_unet_path" in self.opt and os.path.exists(self.opt.texture_unet_path):
                 state_dict = torch.load(self.opt.texture_unet_path, weights_only=True, map_location=torch.device(self.device))
                 self.texture_seed = state_dict["seed"]
                 self.texture_unet.load_state_dict(state_dict["unet"])
