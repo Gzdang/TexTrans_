@@ -1,7 +1,7 @@
 import os
 import torch
 
-from masactrl.attn_processor import set_masactrl_attn
+from masactrl.attn_processor import set_masactrl_attn, set_local_attn
 from masactrl.utils import image_transfer
 from utils import *
 
@@ -17,7 +17,7 @@ def main(cfg):
     control = {"depth": [ref_depth, tar_depth]}
 
     # load obj
-    init_texture = "output/proj/texture_l.png"
+    init_texture = "output/texture_l.png"
     tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, False, init_texture)
 
     image, _ = tar_uv_model.render_all()
@@ -31,6 +31,7 @@ def main(cfg):
 
     num_step = cfg.model.num_step
     strength = 0.6
+    set_local_attn(model, render_size//8)
 
     # invert the source image
     style_code, latents_list = model.invert(
@@ -61,7 +62,7 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=0.75,
+        control_scale=4,
         base_resolution=img_size,
         strength=strength
     )

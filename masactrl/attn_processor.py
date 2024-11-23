@@ -11,7 +11,7 @@ from typing import Optional
 from masactrl.utils import attn_adain
 
 
-def reset_attn(model, attn_init_dim=None):
+def reset_attn(model):
     unet = model.unet
     attn_processor = unet.attn_processors
 
@@ -20,6 +20,20 @@ def reset_attn(model, attn_init_dim=None):
         attn_processor[k] = default_processor
 
     unet.set_attn_processor(attn_processor)
+
+
+def set_local_attn(model, attn_init_dim=None):
+    unet = model.unet
+    attn_processor = unet.attn_processors
+    pattern = "(up|mid)\w.*attn1"
+
+    masactrl_processor = MasaProcessor(attn_init_dim, False)
+    for k, _ in attn_processor.items():
+        if re.match(pattern, k) is not None:
+            attn_processor[k] = masactrl_processor
+
+    unet.set_attn_processor(attn_processor)
+
 
 def set_masactrl_attn(model, attn_init_dim=None):
     unet = model.unet
@@ -33,28 +47,30 @@ def set_masactrl_attn(model, attn_init_dim=None):
 
     unet.set_attn_processor(attn_processor)
 
+
 class MasaProcessor:
     r"""
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self, attn_init_dim=None):
+    def __init__(self, attn_init_dim=None, is_masa=True):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
-
+        self.is_masa = is_masa
         if attn_init_dim is not None:
-            attn_dims = [attn_init_dim, attn_init_dim//2, attn_init_dim//4, attn_init_dim//8]
-            self.attn_masks={}
+            attn_dims = [attn_init_dim, attn_init_dim // 2, attn_init_dim // 4, attn_init_dim // 8]
+            self.attn_masks = {}
             for attn_dim in attn_dims:
-                attn_mask = torch.zeros(9*(attn_dim)**2, 9*(attn_dim)**2)
+                attn_mask = torch.zeros((3 * (attn_dim)) ** 2, (3 * (attn_dim)) ** 2)
                 for i in range(3):
                     for j in range(3):
-                        temp = torch.zeros(attn_dim*3, attn_dim*3)
-                        temp[i*attn_dim: (i+1)*attn_dim, j*attn_dim:(j+1)*attn_dim] = 1
+                        temp = torch.zeros(attn_dim * 3, attn_dim * 3)
+                        temp[i * attn_dim : (i + 1) * attn_dim, j * attn_dim : (j + 1) * attn_dim] = 1
                         temp = torch.flatten(temp).unsqueeze(0).T * torch.flatten(temp).unsqueeze(0)
                         attn_mask += temp
 
-                attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask])
+                attn_mask = attn_mask.unsqueeze(0)
+                # attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask])
                 # attn_mask = torch.stack([torch.ones_like(attn_mask), attn_mask, torch.ones_like(attn_mask), attn_mask])
                 attn_mask = attn_mask.type(torch.bool).unsqueeze(1).cuda().requires_grad_(False)
                 self.attn_masks[attn_dim] = attn_mask
@@ -93,7 +109,7 @@ class MasaProcessor:
             # (batch, heads, source_length, target_length)
             attention_mask = attention_mask.view(batch_size, attn.heads, -1, attention_mask.shape[-1])
         elif hasattr(self, "attn_masks"):
-            sub_len = int(math.sqrt(hidden_states.shape[-2]/9))
+            sub_len = int(math.sqrt(hidden_states.shape[-2] / 9))
             if sub_len in self.attn_masks.keys():
                 attention_mask = self.attn_masks[sub_len]
 
@@ -124,9 +140,10 @@ class MasaProcessor:
             key = attn.norm_k(key)
 
         # masactrl
-        # query = attn_adain(query)
-        key = key.chunk(2)[0].repeat(2, 1, 1, 1)
-        value = value.chunk(2)[0].repeat(2, 1, 1, 1)
+        if self.is_masa:
+            # query = attn_adain(query)
+            key = key.chunk(2)[0].repeat(2, 1, 1, 1)
+            value = value.chunk(2)[0].repeat(2, 1, 1, 1)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1

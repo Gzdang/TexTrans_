@@ -256,7 +256,10 @@ class MyPipelineXL(StableDiffusionXLPipeline):
 
         if control.get("depth") is not None:
             depth = control["depth"]
-            depth = self.control_image_processor.preprocess(depth, height=height, width=width)
+            control_image_processor = VaeImageProcessor(
+                vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+            )
+            depth = control_image_processor.preprocess(depth, height=height, width=width)
             depth = depth.expand(batch_size, -1, -1, -1).to(self.controlnet.device)
             control["depth"] = depth.to(self.controlnet.dtype)
 

@@ -1,7 +1,7 @@
 import os
 import torch
 
-from masactrl.attn_processor import set_masactrl_attn
+from masactrl.attn_processor import set_masactrl_attn, set_local_attn
 from masactrl.utils import image_transfer
 from utils import *
 
@@ -23,6 +23,7 @@ def main(cfg):
     prompts = [ref_prompt, target_prompt]
 
     num_step = cfg.model.num_step
+    set_local_attn(model, render_size//8)
 
     # invert the source image
     style_code, latents_list = model.invert(
@@ -31,6 +32,8 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
+        # control={"depth": ref_depth},
+        # control_scale=1,
     )
 
     # tar_image_ = image_transfer(tar_img, ref_img)
@@ -40,6 +43,8 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
+        # control={"depth": tar_depth},
+        # control_scale=-4,
     )
     start_code = start_code.expand(len(prompts), -1, -1, -1)
     # start_code = style_code.expand(len(prompts), -1, -1, -1)
@@ -52,7 +57,7 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=0.75,
+        control_scale=2,
         base_resolution=img_size,
         # uv_model = tar_uv_model
     )

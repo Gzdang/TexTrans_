@@ -246,7 +246,7 @@ class MyPipeline(StableDiffusionPipeline):
             # compute the previous noise sample x_t -> x_t-1
             # latents, pred_x0 = self.step(noise_pred.repeat(2,1,1,1), t, latents)
             latents_, pred_x0 = self.step(noise_pred, t, latents)
-            # image = self.latent2image(pred_x0, return_type="pt").detach()
+            # image = self.latent2image(latents_, return_type="pt").detach()
             # save_image(image, "./output/proj/image_.png")
             # image = image[1:]
             if uv_model is not None and (i>30 and i%5 == 0):
@@ -435,6 +435,7 @@ class MyPipeline(StableDiffusionPipeline):
 
             # compute the previous noise sample x_t-1 -> x_t
             latents, pred_x0 = self.next_step(noise_pred, t, latents)
+            # save_image(self.latent2image(latents, "pt"), "test.png")
 
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
