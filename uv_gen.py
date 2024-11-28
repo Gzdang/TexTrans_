@@ -14,13 +14,13 @@ def main(cfg):
     model = load_model(cfg.model, device)
 
     ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, cfg.ref_idx, cfg.tar_idx, img_size)
-    control = {"depth": [ref_depth, tar_depth]}
+    control = {"depth": [ref_depth, ref_depth, tar_depth]}
 
     # load obj
     # tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, True)
 
     ref_prompt, target_prompt = "", ""
-    prompts = [ref_prompt, target_prompt]
+    prompts = [ref_prompt, ref_prompt, target_prompt]
 
     num_step = cfg.model.num_step
     set_local_attn(model, render_size//8)

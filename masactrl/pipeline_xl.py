@@ -147,9 +147,9 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             control_image_processor = VaeImageProcessor(
                 vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
             )
-            depth = control_image_processor.preprocess(depth, height=height, width=width)
-            depth = depth.expand(prompt_embeds.shape[0], -1, -1, -1).to(self.controlnet.device)
-            control["depth"] = depth.to(self.controlnet.dtype)
+            control["depth"] = control_image_processor.preprocess(depth, height=height, width=width).to(
+                self.controlnet.device, self.controlnet.dtype
+            )
 
         self.scheduler.set_timesteps(num_inference_steps)
         start_idx = int(num_inference_steps * strength)
@@ -166,6 +166,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             # std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
             # latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
 
+            # latents = torch.cat([latents_ref, latents_ref, latents_cur])
             latents = torch.cat([latents_ref, latents_cur])
 
             model_inputs = latents
@@ -195,6 +196,8 @@ class MyPipelineXL(StableDiffusionXLPipeline):
                         for samples_prev, samples_curr in zip(down_block_res_samples, down_block_depth)
                     ]
                     mid_block_res_sample += mid_block_depth
+                # down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2]]) for t in down_block_res_samples]
+                # mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2]])
 
             noise_pred = self.unet(
                 model_inputs,
@@ -210,7 +213,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             # image = self.latent2image(latents[-1:].float(), return_type="pt")
             # save_image(image, "./temp/temp.png")
 
-        image = self.latent2image(latents.float(), return_type="pt")
+        image = self.latent2image(latents[-1:].float(), return_type="pt")
         return image
 
     @torch.no_grad()

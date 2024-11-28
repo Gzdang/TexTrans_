@@ -25,7 +25,8 @@ class TexturedMeshModel(nn.Module):
         device=torch.device("cpu"),
         augmentations=False,
         augment_prob=0.5,
-        use_unet=True
+        use_unet=True,
+        with_materials=True
     ):
 
         super().__init__()
@@ -38,6 +39,7 @@ class TexturedMeshModel(nn.Module):
         self.mesh_scale = self.opt.shape_scale
         self.texture_resolution = self.opt.texture_resolution
         self.use_unet = use_unet
+        self.with_materials = with_materials
         self.initial_texture_path = initial_texture_path
         self.cache_path = cache_path
 
@@ -85,14 +87,13 @@ class TexturedMeshModel(nn.Module):
 
         # 初始化模型uv坐标
         self.vt, self.ft = self.init_texture_map()
-        self.face_attributes = self.mesh.face_uv_matrix
+        self.face_attributes = kal.ops.mesh.index_vertices_by_faces(self.vt.unsqueeze(0), self.ft.long()).to(device)
         self.xyz_attributes = self.mesh.face_xyz_matrix
 
-        if self.use_unet:
-            self.perceptual_loss = LPIPS(True).to(self.device).eval()
+        # self.perceptual_loss = LPIPS(True).to(self.device).eval()
 
     def init_meshes(self):
-        mesh = Mesh(self.opt.shape_path, self.device)
+        mesh = Mesh(self.opt.shape_path, self.with_materials, self.device)
         return mesh
 
     def init_textures(self):
@@ -126,7 +127,8 @@ class TexturedMeshModel(nn.Module):
             cache_exists_flag = vt_cache.exists() and ft_cache.exists()
 
         if (
-            self.mesh.vertex_uvs is not None
+            hasattr(self.mesh, "vertex_uvs")
+            and self.mesh.vertex_uvs is not None
             and self.mesh.face_uvs is not None
             and self.mesh.vertex_uvs.shape[0] > 0
             and self.mesh.face_uvs.min() > -1
@@ -157,6 +159,10 @@ class TexturedMeshModel(nn.Module):
                 torch.save(vt.cpu(), vt_cache)
                 torch.save(ft.cpu(), ft_cache)
         return vt, ft
+
+    def set_perceptual_loss(self, losser):
+        self.perceptual_loss = losser
+        return self.perceptual_loss
 
     def get_last_layer(self):
         return self.texture_unet[-1][-1].weight
@@ -195,11 +201,8 @@ class TexturedMeshModel(nn.Module):
         else:
             texture_img = self.texture_map
 
-        # render_cache = self.render_cache
-        render_cache = None
-
         with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
-            images, mask, depth, normals, render_cache = self.renderer.render_multi_view_texture(
+            images, mask, depth, normals, _ = self.renderer.render_multi_view_texture(
                 augmented_vertices,
                 self.mesh.faces,
                 self.face_attributes,
@@ -208,10 +211,10 @@ class TexturedMeshModel(nn.Module):
                 azim=phi,
                 radius=radius,
                 look_at_height=self.dy,
-                render_cache=render_cache,
+                render_cache=None,
                 dims=(dim, dim),
             )
-        # self.render_cache = render_cache
+
         mask = mask.detach()
 
         if background != None:
@@ -228,7 +231,6 @@ class TexturedMeshModel(nn.Module):
             "mask": mask,
             "depth": depth,
             "normals": normals,
-            "render_cache": render_cache,
             "texture_map": texture_img,
         }
 
@@ -254,8 +256,8 @@ class TexturedMeshModel(nn.Module):
     def project_all(self, target):
         # self.init_texture_map()
         optimizer = torch.optim.Adam(self.parameters(), 1e-4)
-        scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 700], gamma=0.5)
-        for _ in range(800):
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 800], gamma=0.5)
+        for _ in range(1000):
             image, _ = self.render_all()
             loss = torch.nn.functional.l1_loss(image, target.detach())
             loss += self.perceptual_loss(target, image)[0][0][0][0]
@@ -267,18 +269,3 @@ class TexturedMeshModel(nn.Module):
         # print()
         res, _ = self.render_all()
         return res.detach()
-    
-    def project(self, target, elev, azim):
-        optimizer = torch.optim.Adam(self.parameters(), 1e-4)
-        for _ in range(200):
-            res = self.render([elev], [azim], 3, dim=self.render_size)
-            loss = torch.nn.functional.l1_loss(res["image"], target.detach())
-            # loss = torch.nn.functional.l1_loss(res["image"], target.detach())
-            # print(loss, end="\r")
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        # print()
-        res = self.render([elev], [azim], 3, dim=self.render_size)["image"]
-        return res.detach()
-

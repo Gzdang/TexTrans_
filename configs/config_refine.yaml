@@ -9,7 +9,6 @@ model:
   type: "sdxl"
   base_model: "./resource/sdxl_base"
   controlnet: "./resource/sdxl_controlnet"
-  image_encoder: "./resource/clip14" 
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1

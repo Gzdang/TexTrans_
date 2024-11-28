@@ -6,10 +6,8 @@ dataset:
   path: "./dataset/512_new"
 model:
   num_step: 50
-  type: "sdxl"
-  base_model: "./resource/sdxl_base"
-  controlnet: "./resource/sdxl_controlnet"
-  image_encoder: "./resource/clip14" 
+  base_model: "./resource/sd15"
+  controlnet: "./resource/controlnet_depth"
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1

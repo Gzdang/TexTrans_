@@ -64,7 +64,7 @@ def load_imgs(resource_dir, ref_idx, tar_idx, size):
     return ref_img, ref_depth, tar_img, tar_depth
 
 
-def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture=None, device="cuda"):
+def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture=None, with_materials=True, device="cuda"):
     object_list_file = f"{cfg.path}/split/chair.txt"
     object_list = []
     texture_list = []
@@ -76,7 +76,7 @@ def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture=None, device
     cfg.shape_path = object_list[obj_idx]
     if init_texture is None:
         init_texture = texture_list[obj_idx]
-    uv_model = TexturedMeshModel(cfg, render_size, init_texture, device=device, use_unet=use_unet)
+    uv_model = TexturedMeshModel(cfg, render_size, init_texture, device=device, use_unet=use_unet, with_materials=with_materials)
     return uv_model
 
 

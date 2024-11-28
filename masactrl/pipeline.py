@@ -104,7 +104,6 @@ class MyPipeline(StableDiffusionPipeline):
         prompt,
         batch_size=1,
         base_resolution=512,
-        is_combine=False,
         num_inference_steps=50,
         guidance_scale=7.5,
         eta=0.0,
@@ -131,12 +130,7 @@ class MyPipeline(StableDiffusionPipeline):
 
         text_embeddings = self.text_encoder(text_input.input_ids.to(DEVICE))[0]
 
-        if is_combine:
-            width = base_resolution * 2
-            height = base_resolution * 3
-        else:
-            width = base_resolution
-            height = base_resolution
+        width, height = base_resolution, base_resolution
 
         # define initial latents
         latents_shape = (batch_size, self.unet.in_channels, height // 8, width // 8)
@@ -166,9 +160,7 @@ class MyPipeline(StableDiffusionPipeline):
                 vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
             )
             if isinstance(depth, list):
-                source_depth = control_image_processor.preprocess(depth[0], height=height, width=width)
-                tar_depth = control_image_processor.preprocess(depth[1], height=height, width=width)
-                depth = torch.cat([source_depth, tar_depth] * (text_embeddings.shape[0] // 2)).to(
+                depth = control_image_processor.preprocess(depth, height=height, width=width).to(
                     self.controlnet.device
                 )
             else:
@@ -186,15 +178,14 @@ class MyPipeline(StableDiffusionPipeline):
             if ref_intermediate_latents is not None:
                 # note that the batch_size >= 2
                 latents_ref = ref_intermediate_latents[-1 - i]
-                _, latents_cur = latents.chunk(2)
-                mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
-                std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
-                mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
-                std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
-                latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
-                # if 900<t:
-                #     latents_cur = feat_adain(latents_cur, latents_ref)
-                latents = torch.cat([latents_ref, latents_cur])
+                latents_cur = latents[-1:]
+                # mean_ref = torch.mean(latents_ref, dim=(2,3), keepdim=True)
+                # std_ref = torch.std(latents_ref, dim=(2,3), keepdim=True)
+                # mean_tar = torch.mean(latents_cur, dim=(2,3), keepdim=True)
+                # std_tar = torch.std(latents_cur, dim=(2,3), keepdim=True)
+                # latents_cur = ((latents_cur - mean_tar)/std_tar)*std_ref + mean_ref
+
+                latents = torch.cat([latents_ref, latents_ref, latents_cur])
             if guidance_scale > 1.0:
                 model_inputs = torch.cat([latents] * 2)
             else:
@@ -226,7 +217,10 @@ class MyPipeline(StableDiffusionPipeline):
                         ]
                         mid_block_res_sample += mid_block_depth
                 return down_block_res_samples, mid_block_res_sample
+            
             down_block_res_samples, mid_block_res_sample = get_control()
+            down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2]]) for t in down_block_res_samples]
+            mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2]])
             # down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2], t[3]]) for t in down_block_res_samples]
             # mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2], mid_block_res_sample[3]])
             @torch.no_grad()
@@ -316,7 +310,6 @@ class MyPipeline(StableDiffusionPipeline):
         control_scale=1,
         style_image=None,
         base_resolution=512,
-        is_combine=False,
         strength=1,
         **kwds,
     ):
@@ -334,12 +327,7 @@ class MyPipeline(StableDiffusionPipeline):
             if batch_size > 1:
                 prompt = [prompt] * batch_size
 
-        if is_combine:
-            width = base_resolution * 2
-            height = base_resolution * 3
-        else:
-            width = base_resolution
-            height = base_resolution
+        width, height = base_resolution, base_resolution
 
         if style_image is not None:
             style_image = self.feature_extractor(style_image, return_tensors="pt").pixel_values

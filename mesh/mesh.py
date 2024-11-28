@@ -5,17 +5,19 @@ from mesh.utils import import_mesh
 
 
 class Mesh(torch.nn.Module):
-    def __init__(self, obj_path, device="cuda"):
+    def __init__(self, obj_path, with_materials=True, device="cuda"):
         super().__init__()
 
-        mesh = import_mesh(obj_path, with_normals=True, with_materials=True)
+        mesh = import_mesh(obj_path, with_normals=True, with_materials=with_materials)
 
         self.vertices = mesh.vertices.to(device)
         self.faces = mesh.faces.to(device)
         self.vertex_normals = mesh.normals.to(device)
         self.face_normals = mesh.face_normals_idx.to(device)
-        self.vertex_uvs = mesh.uvs.to(device)
-        self.face_uvs = mesh.face_uvs_idx.to(device)
+        if mesh.uvs is not None:
+            self.vertex_uvs = mesh.uvs.to(device)
+        if mesh.face_uvs_idx is not None:
+            self.face_uvs = mesh.face_uvs_idx.to(device)
 
         self.normalize_mesh(scale_rate=1.2)
 
@@ -25,7 +27,7 @@ class Mesh(torch.nn.Module):
         self.face_normal_matrix = kal.ops.mesh.index_vertices_by_faces(
             self.vertex_normals.unsqueeze(0), self.face_normals.long()
         )
-        self.face_uv_matrix = kal.ops.mesh.index_vertices_by_faces(self.vertex_uvs.unsqueeze(0), self.face_uvs.long()).to(device)
+        # self.face_uv_matrix = kal.ops.mesh.index_vertices_by_faces(self.vertex_uvs.unsqueeze(0), self.face_uvs.long()).to(device)
 
     def to(self, device):
         self.vertices = self.vertices.to(device)

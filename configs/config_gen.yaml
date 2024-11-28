@@ -7,7 +7,6 @@ model:
   num_step: 50
   base_model: "./resource/sd15"
   controlnet: "./resource/controlnet_depth"
-  image_encoder: "./resource/clip14" 
 mesh:
   path: "resource/3D_Future"
   shape_scale: 1

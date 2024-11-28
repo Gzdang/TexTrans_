@@ -141,9 +141,12 @@ class MasaProcessor:
 
         # masactrl
         if self.is_masa:
-            # query = attn_adain(query)
-            key = key.chunk(2)[0].repeat(2, 1, 1, 1)
-            value = value.chunk(2)[0].repeat(2, 1, 1, 1)
+            if key.shape[0] == 3:
+                key[-1] = key[1]
+                value[-1] = value[0]
+            else:
+                key[-1] = key[0]
+                value[-1] = value[0]
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1

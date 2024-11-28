@@ -14,20 +14,19 @@ def main(cfg):
     model = load_model(cfg.model, device)
 
     ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, cfg.ref_idx, cfg.tar_idx, img_size)
-    control = {"depth": [ref_depth, tar_depth]}
+    control = {"depth": [ref_depth, ref_depth, tar_depth]}
 
     # load obj
     init_texture = "output/texture_l.png"
     tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, False, init_texture)
 
     image, _ = tar_uv_model.render_all()
-    save_image(image, "render.png")
-    tar_img = Image.open("./render.png").resize((img_size, img_size))
-    # tar_img = Image.open("output/gen/sample_3/masactrl_step.png").resize((img_size, img_size))
+    save_image(image, "temp/render_l.png")
+    tar_img = Image.open("temp/render_l.png").resize((img_size, img_size))
 
     ref_prompt = ""
     target_prompt = ""
-    prompts = [ref_prompt, target_prompt]
+    prompts = [ref_prompt, ref_prompt, target_prompt]
 
     num_step = cfg.model.num_step
     strength = 0.6
