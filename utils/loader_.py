@@ -20,14 +20,8 @@ def load_confg(base_path, cfg_name):
     if not os.path.exists(cfg_dir):
         raise FileNotFoundError()
     cfg = OmegaConf.load(cfg_dir)
-
     if os.path.exists(os.path.join(base_path, "global.yaml")):
         cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(base_path, "global.yaml")))
-
-    args = OmegaConf.from_cli()
-    print(args)
-    # assert args.ref_mesh is None or args.ref_mesh is None or args.tar_mesh is None
-    cfg = OmegaConf.merge(cfg, args)
 
     return cfg
 
@@ -62,23 +56,40 @@ def load_model(cfg, device):
 
 
 def load_imgs(resource_dir, ref_idx, tar_idx, size):
-    ref_img = Image.open(os.path.join(resource_dir, f"{ref_idx}/render_images/all_rgb.png")).resize(size)
-    ref_depth = Image.open(os.path.join(resource_dir, f"{ref_idx}/render_images/all_depth.png")).resize(size)
-    tar_img = Image.open(os.path.join(resource_dir, f"{tar_idx}/render_images/all_rgb.png")).resize(size)
-    tar_depth = Image.open(os.path.join(resource_dir, f"{tar_idx}/render_images/all_depth.png")).resize(size)
+    ref_img = Image.open(os.path.join(resource_dir, f"{ref_idx}/all_rgb.png")).resize(size)
+    ref_depth = Image.open(os.path.join(resource_dir, f"{ref_idx}/all_depth.png")).resize(size)
+    tar_img = Image.open(os.path.join(resource_dir, f"{tar_idx}/all_rgb.png")).resize(size)
+    tar_depth = Image.open(os.path.join(resource_dir, f"{tar_idx}/all_depth.png")).resize(size)
 
     return ref_img, ref_depth, tar_img, tar_depth
 
 
-def load_uv_model(cfg, mesh_path, render_size, use_unet, init_texture=None, with_materials=True, device="cuda"):
-    cfg.shape_path = mesh_path
+def load_uv_model(cfg, obj_idx, render_size, use_unet, init_texture=None, with_materials=True, device="cuda"):
+    object_list_file = f"{cfg.path}/split/chair.txt"
+    object_list = []
+    texture_list = []
+    with open(object_list_file) as f:
+        for obj_name in f.readlines():
+            object_list.append(f"{cfg.path}/obj/{obj_name.strip()}.obj")
+            texture_list.append(f"{cfg.path}/texture/{obj_name.strip()}.png")
+
+    cfg.shape_path = object_list[obj_idx]
+    if init_texture is None:
+        init_texture = texture_list[obj_idx]
     uv_model = TexturedMeshModel(cfg, render_size, init_texture, device=device, use_unet=use_unet, with_materials=with_materials)
     return uv_model
 
 
-def preprocess_mask(cfg, texture_path):
-    texture = np.array(Image.open(texture_path).resize([cfg.texture_resolution] * 2))
+def load_uv_mask(cfg, obj_idx):
+    object_list_file = f"{cfg.path}/split/chair.txt"
+    texture_list = []
+    with open(object_list_file) as f:
+        for obj_name in f.readlines():
+            texture_list.append(f"{cfg.path}/texture/{obj_name.strip()}.png")
+
+    init_texture = texture_list[obj_idx]
+    texture = np.array(Image.open(init_texture).resize([cfg.texture_resolution] * 2))
     mask = (texture[:, :, -1] == 255).astype(np.uint8)
-    Image.fromarray(mask * 255).save(".cache/mask.png")
-    Image.fromarray((1 - mask) * 255).save(".cache/_mask.png")
+    Image.fromarray(mask * 255).save("temp/mask.png")
+    Image.fromarray((1 - mask) * 255).save("temp/_mask.png")
     return mask
