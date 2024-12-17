@@ -1,2 +1,6 @@
-ref_idx: 22
-tar_idx: 5
+ref_mesh:
+ref_texture:
+tar_mesh:
+tar_texture:
+
+n_c: 9

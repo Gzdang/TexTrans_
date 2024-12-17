@@ -1,3 +1,4 @@
+import math
 import os
 import numpy as np
 import torch
@@ -8,7 +9,7 @@ from torchvision.utils import save_image
 
 from mesh.textured_mesh import TexturedMeshModel
 from mesh.unet.lipis import LPIPS
-from utils.loader import *
+from utils import *
 
 
 def reshape_image(image_batch):
@@ -21,10 +22,14 @@ def reshape_image(image_batch):
 
 def main(cfg):
     render_size = cfg.mesh.render_size
-    img_size = render_size * 3
+
+    row = math.floor(cfg.n_c**0.5)
+    col = cfg.n_c // row
+    img_size = (render_size*col, render_size*row)
     
-    model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, True)
-    uv_mask = load_uv_mask(cfg.mesh, cfg.tar_idx)
+    cfg.mesh.n_c = cfg.n_c
+    model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, True)
+    # uv_mask = load_uv_mask(cfg.mesh, cfg.tar_idx)
 
     # find last res
     out_dir = "./output/gen"
@@ -32,7 +37,7 @@ def main(cfg):
     out_dir = os.path.join(out_dir, f"sample_{sample_count-1}")
     target_path = os.path.join(out_dir, "masactrl_step.png")
     target = (
-        torch.Tensor(np.array(Image.open(target_path).resize((img_size, img_size)).convert("RGB")))
+        torch.Tensor(np.array(Image.open(target_path).resize(img_size).convert("RGB")))
         .permute(2, 0, 1)
         .cuda()
         .unsqueeze(0)

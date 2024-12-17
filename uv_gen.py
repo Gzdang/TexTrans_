@@ -1,3 +1,4 @@
+import math
 import os
 import torch
 
@@ -9,21 +10,23 @@ def main(cfg):
     device = cfg.device
     mesh_cfg = cfg.mesh
     render_size = mesh_cfg.render_size
-    img_size = render_size * 3
+
+    row = math.floor(cfg.n_c**0.5)
+    col = cfg.n_c // row
+    img_size = (render_size*col, render_size*row)
+
+    ref_img, ref_depth = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, out_path=".cache/ref")
+    tar_img, tar_depth = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, out_path=".cache/tar")
 
     model = load_model(cfg.model, device)
-
-    ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, cfg.ref_idx, cfg.tar_idx, img_size)
     control = {"depth": [ref_depth, ref_depth, tar_depth]}
-
-    # load obj
-    # tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, True)
 
     ref_prompt, target_prompt = "", ""
     prompts = [ref_prompt, ref_prompt, target_prompt]
 
     num_step = cfg.model.num_step
-    set_local_attn(model, render_size//8)
+    # set_local_attn(model)
+    set_local_attn(model, render_size//8, scale_factor=(col, row))
 
     # invert the source image
     style_code, latents_list = model.invert(
@@ -32,24 +35,22 @@ def main(cfg):
         num_inference_steps=num_step,
         guidance_scale=1,
         base_resolution=img_size,
-        # control={"depth": ref_depth},
-        # control_scale=1,
     )
 
-    # tar_image_ = image_transfer(tar_img, ref_img)
-    start_code, _ = model.invert(
-        tar_img,
-        target_prompt,
-        num_inference_steps=num_step,
-        guidance_scale=1,
-        base_resolution=img_size,
-        # control={"depth": tar_depth},
-        # control_scale=-4,
-    )
+    if cfg.tar_texture is not None:
+        start_code, _ = model.invert(
+            tar_img,
+            target_prompt,
+            num_inference_steps=num_step,
+            guidance_scale=1,
+            base_resolution=img_size,
+        )
+    else:
+        start_code = style_code
     start_code = start_code.expand(len(prompts), -1, -1, -1)
-    # start_code = style_code.expand(len(prompts), -1, -1, -1)
 
-    set_masactrl_attn(model, render_size//8)
+    # set_masactrl_attn(model)
+    set_masactrl_attn(model, render_size//8, scale_factor=(col, row))
     masa_imgs = model(
         prompts,
         latents=start_code,

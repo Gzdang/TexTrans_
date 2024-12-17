@@ -2,15 +2,13 @@ output_dir: output
 dtype: fp16
 device: cuda
 mixed_precision: fp16
-dataset:
-  path: "./dataset/512_new"
 model:
   num_step: 50
   type: "sdxl"
-  base_model: "./resource/sdxl_base"
-  controlnet: "./resource/sdxl_controlnet"
+  base_model: "./resource/diffuser/sdxl_base"
+  controlnet: "./resource/diffuser/sdxl_controlnet"
 mesh:
-  path: "resource/3D_Future"
+  path: "dataset/future/Desk"
   shape_scale: 1
   dy: 0
   render_size: 512

@@ -43,6 +43,17 @@ class TexturedMeshModel(nn.Module):
         self.initial_texture_path = initial_texture_path
         self.cache_path = cache_path
 
+        assert opt.n_c in [9, 6, 4], "num of camera is not defined"
+        if opt.n_c == 9:
+            self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+            self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+        elif opt.n_c == 6:
+            self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+            self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+        elif opt.n_c == 4:
+            self.elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
+            self.azim_list = [t*np.pi for t in (0, 1/2, 1, 3/2)]
+
         # uv特征数量
         self.num_features = 3
 
@@ -241,14 +252,8 @@ class TexturedMeshModel(nn.Module):
             cols.append(torch.cat(row.chunk(3), -1))
         return torch.cat(cols, -2)
 
-    def render_all(self):
-        # elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-        # azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
-
-        elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-        azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
-        
-        res = self.render(elev_list, azim_list, 3, dim=self.render_size)
+    def render_all(self):        
+        res = self.render(self.elev_list, self.azim_list, 3, dim=self.render_size)
         img_res = self.reshape_image(res["image"])
         mask_res = self.reshape_image(res["mask"])
         return img_res, mask_res

@@ -2,14 +2,12 @@ output_dir: output
 dtype: fp16
 device: cuda
 mixed_precision: fp16
-dataset:
-  path: "./dataset/512_new"
 model:
   num_step: 50
-  base_model: "./resource/sd15"
-  controlnet: "./resource/controlnet_depth"
+  base_model: "./resource/diffuser/sd15"
+  controlnet: "./resource/diffuser/controlnet_depth"
 mesh:
-  path: "resource/3D_Future"
+  path: "dataset/future/Desk"
   shape_scale: 1
   dy: 0
   render_size: 384

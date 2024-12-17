@@ -2,6 +2,7 @@ import torch
 import kaolin as kal
 
 from mesh.utils import import_mesh
+# from kaolin.io.obj import import_mesh
 
 
 class Mesh(torch.nn.Module):
@@ -27,7 +28,8 @@ class Mesh(torch.nn.Module):
         self.face_normal_matrix = kal.ops.mesh.index_vertices_by_faces(
             self.vertex_normals.unsqueeze(0), self.face_normals.long()
         )
-        # self.face_uv_matrix = kal.ops.mesh.index_vertices_by_faces(self.vertex_uvs.unsqueeze(0), self.face_uvs.long()).to(device)
+        if mesh.face_uvs_idx is not None:
+            self.face_uv_matrix = kal.ops.mesh.index_vertices_by_faces(self.vertex_uvs.unsqueeze(0), self.face_uvs.long()).to(device)
 
     def to(self, device):
         self.vertices = self.vertices.to(device)
@@ -38,7 +40,8 @@ class Mesh(torch.nn.Module):
         self.face_uvs = self.face_uvs.to(device)
         self.face_xyz_matrix = self.face_xyz_matrix.to(device)
         # self.face_normal_matrix = self.face_normal_matrix.to(device)
-        self.face_uv_matrix = self.face_uv_matrix.to(device)
+        if hasattr(self, "face_uv_matrix"):
+            self.face_uv_matrix = self.face_uv_matrix.to(device)
         return self
 
     def normalize_mesh(self, scale_rate=1, dy=0):

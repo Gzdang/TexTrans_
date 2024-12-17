@@ -1,3 +1,4 @@
+import math
 import os
 import torch
 
@@ -9,27 +10,23 @@ def main(cfg):
     device = cfg.device
     mesh_cfg = cfg.mesh
     render_size = mesh_cfg.render_size
-    img_size = render_size * 3
+    
+    row = math.floor(cfg.n_c**0.5)
+    col = cfg.n_c // row
+    img_size = (render_size*col, render_size*row)
 
+    ref_img, ref_depth = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, out_path=".cache/ref_up")
+    tar_img, tar_depth = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, out_path=".cache/tar_up")
+    
     model = load_model(cfg.model, device)
-
-    ref_img, ref_depth, tar_img, tar_depth = load_imgs(cfg.dataset.path, cfg.ref_idx, cfg.tar_idx, img_size)
     control = {"depth": [ref_depth, ref_depth, tar_depth]}
-
-    # load obj
-    init_texture = "output/texture_l.png"
-    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_idx, render_size, False, init_texture)
-
-    image, _ = tar_uv_model.render_all()
-    save_image(image, "temp/render_l.png")
-    tar_img = Image.open("temp/render_l.png").resize((img_size, img_size))
 
     ref_prompt = ""
     target_prompt = ""
     prompts = [ref_prompt, ref_prompt, target_prompt]
 
     num_step = cfg.model.num_step
-    strength = 0.6
+    strength = cfg.strength
     set_local_attn(model, render_size//8)
 
     # invert the source image

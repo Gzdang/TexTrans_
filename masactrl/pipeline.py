@@ -103,7 +103,7 @@ class MyPipeline(StableDiffusionPipeline):
         self,
         prompt,
         batch_size=1,
-        base_resolution=512,
+        base_resolution=(512, 512),
         num_inference_steps=50,
         guidance_scale=7.5,
         eta=0.0,
@@ -130,7 +130,7 @@ class MyPipeline(StableDiffusionPipeline):
 
         text_embeddings = self.text_encoder(text_input.input_ids.to(DEVICE))[0]
 
-        width, height = base_resolution, base_resolution
+        width, height = base_resolution
 
         # define initial latents
         latents_shape = (batch_size, self.unet.in_channels, height // 8, width // 8)
