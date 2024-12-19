@@ -45,7 +45,7 @@ def sde(model, ref_image, tar_image, control, num_step, strength, size):
         num_inference_steps=num_step,
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
-        # control=control,
+        control=control,
         control_scale=0.5,
         base_resolution=size,
         strength = strength
@@ -89,8 +89,11 @@ def main(cfg):
 
     # elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
     # azim_list = [t*np.pi for t in (1/4, 3/4, 5/4, 7/4)]
-    elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
-    azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
+    # elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
+    # azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
+
+    elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+    azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
 
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
@@ -146,7 +149,7 @@ def main(cfg):
         # blur_texture = gaussian_blur(last_texture,9,9)
 
         scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[600, 800], gamma=0.5)
-        for i in range(500):
+        for i in range(1000):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size)
@@ -163,6 +166,7 @@ def main(cfg):
             scaler.update()
             scheduler.step()
 
+        print()
         last_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
         save_image(texture_out["image"], ".cache/mesa_res.png")
         save_image(tar_uv_model.texture_map, ".cache/texture.png")
@@ -176,5 +180,3 @@ def main(cfg):
 if __name__ == "__main__":
     cfg = load_confg("configs", "config_refine.yaml")
     main(cfg)
-
-

@@ -18,8 +18,10 @@ python uv_gen_up.py strength=0.4 ref_mesh=$ref_mesh ref_texture=$ref_texture tar
 python uv_project_up.py tar_mesh=$tar_mesh
 python refine.py strength=0.4 ref_mesh=$ref_mesh ref_texture=$ref_texture tar_mesh=$tar_mesh tar_texture=output/texture_h.png
 
+echo "finish!"
 if [ ! -d "results" ]; then
     mkdir results
 fi
-rename="results/output-${cls_name}-${ref_idx}-${tar_idx}"
-cp -rf output $rename
+rename="results/output-${cls_name}-${ref_idx}-${tar_idx}/"
+mkdir -p $rename
+cp -rf output/*.png $rename
