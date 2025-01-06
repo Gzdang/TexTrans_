@@ -84,6 +84,16 @@ def main(cfg):
     base_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
     last_mask = base_mask
 
+    # if cfg.n_c == 9:
+    #     elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+    #     azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+    # elif cfg.n_c == 6:
+    #     elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
+    #     azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+    # elif cfg.n_c == 4:
+    #     elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
+    #     azim_list = [t*np.pi for t in (0, 1/2, 1, 3/2)]
+
     # elev_list = [t * np.pi for t in (3/4, 1/2, 1/2, 1/2, 1/4, )]
     # azim_list = [t * np.pi for t in (0, 1, 1/3, 5/3, 0, )]
 

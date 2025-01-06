@@ -46,8 +46,8 @@ class RenderHandle:
             self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
             self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
         elif n_c == 6:
-            self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-            self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+            self.elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
+            self.azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
         elif n_c == 4:
             self.elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
             self.azim_list = [t*np.pi for t in (0, 1/2, 1, 3/2)]
@@ -117,9 +117,10 @@ class RenderHandle:
             mesh_index += 1
 
 if __name__ == "__main__":
-    cls_name = "Lazy Sofa"
-    handler = RenderHandle(f"resource/dataset/3D-FUTURE-model", cls_name, 9, render_size=512, image_size=512, is_load_mesh=False)
-    
-    sub_folder = cls_name.replace(' ', '_')
-    sub_folder = sub_folder.replace('-', '_')
-    handler.render_images(f"./dataset/future/{sub_folder.lower()}")
+    cls_list = ['Corner/Side Table', 'Sideboard / Side Cabinet / Console Table', 'Wine Cabinet', 'TV Stand', 'Drawer Chest / Corner cabinet', 'Shelf', 'Round End Table', 'Bunk Bed', 'Bed Frame', 'Dining Chair', 'Lounge Chair / Cafe Chair / Office Chair', 'Dressing Chair', 'Classic Chinese Chair', 'Barstool', 'Dressing Table', 'Three-Seat / Multi-seat Sofa', 'Loveseat Sofa', 'L-shaped Sofa', 'Chaise Longue Sofa', 'Footstool / Sofastool / Bed End Stool / Stool']
+    for cls_name in cls_list:
+        handler = RenderHandle(f"resource/dataset/3D-FUTURE-model", cls_name, 9, render_size=512, image_size=512, is_load_mesh=False)
+
+        sub_folder = cls_name.replace(' ', '_')
+        sub_folder = sub_folder.replace('-', '_')
+        handler.render_images(f"./dataset/future/{sub_folder.lower()}")

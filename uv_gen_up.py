@@ -11,12 +11,12 @@ def main(cfg):
     mesh_cfg = cfg.mesh
     render_size = mesh_cfg.render_size
     
-    row = math.floor(cfg.n_c**0.5)
-    col = cfg.n_c // row
-    img_size = (render_size*col, render_size*row)
+    col = math.floor(cfg.n_c**0.5)
+    row = cfg.n_c // col
+    img_size = (render_size*row, render_size*col)
 
-    ref_img, ref_depth = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, out_path=".cache/ref_up")
-    tar_img, tar_depth = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, out_path=".cache/tar_up")
+    ref_img, ref_depth = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/ref_up")
+    tar_img, tar_depth = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/tar_up")
     
     model = load_model(cfg.model, device)
     control = {"depth": [ref_depth, ref_depth, tar_depth]}

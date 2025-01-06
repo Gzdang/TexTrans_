@@ -296,10 +296,15 @@ def import_mesh(path, with_materials=False, with_normals=False,
                                  for el in sublist]).view(-1, 2)
         # uvs[..., 1] = 1 - uvs[..., 1]
         face_uvs_idx = torch.LongTensor(face_uvs_idx) - 1
-        materials, material_assignments = process_materials_and_assignments(
-            materials_dict, material_assignments_dict, error_handler, faces.shape[0], error_context_str=path)
-        if not raw_materials:
-            materials = [raw_material_to_pbr(m) for m in materials]
+
+        try:
+            materials, material_assignments = process_materials_and_assignments(
+                materials_dict, material_assignments_dict, error_handler, faces.shape[0], error_context_str=path)
+            if not raw_materials:
+                materials = [raw_material_to_pbr(m) for m in materials]
+        except:
+            materials = None
+            material_assignments = None
     else:
         uvs = None
         face_uvs_idx = None

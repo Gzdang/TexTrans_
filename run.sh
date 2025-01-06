@@ -22,6 +22,7 @@ echo "finish!"
 if [ ! -d "results" ]; then
     mkdir results
 fi
-rename="results/output-${cls_name}-${ref_idx}-${tar_idx}/"
+rename="results/output-${cls_name}-${ref_idx}-${tar_idx}"
 mkdir -p $rename
-cp -rf output/*.png $rename
+mv output $rename
+mv .cache $rename

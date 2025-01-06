@@ -23,9 +23,8 @@ def reshape_image(image_batch):
 def main(cfg):
     render_size = cfg.mesh.render_size
 
-    row = math.floor(cfg.n_c**0.5)
-    col = cfg.n_c // row
-    img_size = (render_size*col, render_size*row)
+    col = math.floor(cfg.n_c**0.5)
+    row = cfg.n_c // col
     
     cfg.mesh.n_c = cfg.n_c
     model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, True)
@@ -37,28 +36,28 @@ def main(cfg):
     out_dir = os.path.join(out_dir, f"sample_{sample_count-1}")
     target_path = os.path.join(out_dir, "masactrl_step.png")
     target = (
-        torch.Tensor(np.array(Image.open(target_path).resize(img_size).convert("RGB")))
+        torch.Tensor(np.array(Image.open(target_path).resize((render_size*col, render_size*row)).convert("RGB")))
         .permute(2, 0, 1)
         .cuda()
         .unsqueeze(0)
         / 255.0
     )
 
-    perceptual_loss = model.set_perceptual_loss(LPIPS(True).to(cfg.device).eval())
     optimizer = torch.optim.AdamW(model.parameters(), 1e-4)
-    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 700], gamma=0.5)
-    for i in range(800):
+    perceptual_loss = model.set_perceptual_loss(LPIPS(True).to(cfg.device).eval())
+    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 750], gamma=0.5)
+    for i in range(1000):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
-        print(f"{i}: {loss}", end="\r" if i < 799 else "\n")
+        print(f"{i}: {loss}", end="\r" if i < 999 else "\n")
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         scheduler.step()
 
-        # save_image(image, "output/proj/test.png")
+        # save_image(image, "test.png")
 
     res, res_ = model.render_all()
     save_image(res, "./output/image_l.png")

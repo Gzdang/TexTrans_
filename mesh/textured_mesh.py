@@ -1,3 +1,4 @@
+import math
 import os
 
 import kaolin as kal
@@ -48,8 +49,8 @@ class TexturedMeshModel(nn.Module):
             self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
             self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
         elif opt.n_c == 6:
-            self.elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-            self.azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+            self.elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
+            self.azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
         elif opt.n_c == 4:
             self.elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
             self.azim_list = [t*np.pi for t in (0, 1/2, 1, 3/2)]
@@ -246,10 +247,13 @@ class TexturedMeshModel(nn.Module):
         }
 
     def reshape_image(self, image_batch):
-        image_row = image_batch.chunk(3)
+        n_c = image_batch.shape[0]
+        col = math.floor(n_c**0.5)
+        row = n_c // col
+        image_row = image_batch.chunk(row)
         cols = []
-        for row in image_row:
-            cols.append(torch.cat(row.chunk(3), -1))
+        for images in image_row:
+            cols.append(torch.cat(images.chunk(col), -1))
         return torch.cat(cols, -2)
 
     def render_all(self):        
