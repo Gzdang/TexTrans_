@@ -35,7 +35,7 @@ def render_images(mesh_path, texture_path=None, size=512, n_c=9, out_path=".cach
     os.makedirs(out_path, exist_ok=True)
     mesh = Mesh(mesh_path)
     render = Render(
-        render_size=(size, size),
+        render_size=(512, 512),
         image_size=(size, size),
         interpolation_mode="bilinear",
     )

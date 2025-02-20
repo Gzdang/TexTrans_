@@ -121,8 +121,8 @@ def main(cfg):
             optim_mask.zero_grad()
         save_image((mask_model.texture_map!=0).float(), ".cache/mask_res.png")
 
-        tar_render = tar_uv_model.render([elev], [azim], 3, "black", render_size)
-        ref_render = ref_uv_model.render([elev], [azim], 3, "black", render_size)
+        tar_render = tar_uv_model.render([elev], [azim], 3, "white", render_size)
+        ref_render = ref_uv_model.render([elev], [azim], 3, "white", render_size)
 
         ref_image = (ref_render["image"] * 2 - 1).half()
         ref_depth = ref_render["depth"]
@@ -162,7 +162,7 @@ def main(cfg):
         for i in range(1000):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
-                texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size)
+                texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size, background="white")
                 pl = perceptual_loss(texture_out["image"], target[-1:])[0][0][0][0]
                 ll = torch.nn.functional.l1_loss(texture_out["image"], target[-1:])
                 ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)

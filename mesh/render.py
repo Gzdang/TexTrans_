@@ -99,7 +99,8 @@ class Render(torch.nn.Module):
         view_mask = (face_idx_uv > -1).float()[..., None]
         view_image = kal.render.mesh.texture_mapping(view_uv, texture, mode=self.interpolation_mode)
 
-        view_image = view_image * view_mask
+        # view_image = view_image * view_mask
+        view_image = view_image * view_mask + (1-view_mask)
 
         view_uv = view_uv * view_mask
         view_depth = view_depth * view_mask
@@ -111,10 +112,10 @@ class Render(torch.nn.Module):
         view_normal = view_normal.permute(0, 3, 1, 2)
 
         return {
-            "image": view_image,
-            "depth": view_depth,
-            "mask": view_mask,
-            "normal": view_normal,
+            "image": self.resizer(view_image),
+            "depth": self.resizer(view_depth),
+            "mask": self.resizer(view_mask),
+            "normal": self.resizer(view_normal),
         }
 
     def render_multi_view_texture(
