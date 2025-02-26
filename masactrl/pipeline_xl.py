@@ -289,8 +289,6 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         # interative sampling
         self.scheduler.set_timesteps(num_inference_steps)
         start_idx = int(num_inference_steps * strength)
-        print("Valid timesteps: ", reversed(self.scheduler.timesteps))
-        # print("attributes: ", self.scheduler.__dict__)
         latents_list = [latents]
         pred_x0_list = [latents]
         for i, t in enumerate(tqdm(reversed(self.scheduler.timesteps)[:start_idx], desc="DDIM Inversion")):

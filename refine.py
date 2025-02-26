@@ -17,39 +17,50 @@ def sde(model, ref_image, tar_image, control, num_step, strength, size):
     # prompts = [source_prompt, target_prompt] 
     prompts = [source_prompt, source_prompt, target_prompt] 
 
-    reset_attn(model)
-    style_code, latents_list = model.invert(
-        ref_image,
-        source_prompt,
-        guidance_scale=1,
-        num_inference_steps=num_step,
-        return_intermediates=True,
-        base_resolution=size,
-        strength = strength
-    )
-    start_code, _ = model.invert(
-        tar_image,
-        source_prompt,
-        guidance_scale=1,
-        num_inference_steps=num_step,
-        return_intermediates=True,
-        base_resolution=size,
-        strength = strength
-    )
-    start_code = start_code.expand(len(prompts), -1, -1, -1)
+    reset_attn(model) 
+    _, latents_list = model.invert(
+            ref_image,
+            source_prompt,
+            guidance_scale=1,
+            num_inference_steps=num_step,
+            return_intermediates=True,
+            base_resolution=size,
+            strength = strength
+        )       
+    # save_image(model.latent2image(latents_list[0].float(), "pt"), "test.png")
 
-    set_masactrl_attn(model)
-    image_masactrl = model(
-        prompts,
-        latents=start_code,
-        num_inference_steps=num_step,
-        guidance_scale=1,
-        ref_intermediate_latents=latents_list,
-        control=control,
-        control_scale=0.5,
-        base_resolution=size,
-        strength = strength
-    )
+    for _i in range(5):
+        reset_attn(model) 
+
+        start_code, _ = model.invert(
+            tar_image,
+            source_prompt,
+            guidance_scale=1,
+            num_inference_steps=num_step,
+            return_intermediates=True,
+            base_resolution=size,
+            strength = strength
+        )
+        start_code = start_code.expand(len(prompts), -1, -1, -1)
+
+        set_masactrl_attn(model)
+        image_masactrl = model(
+            prompts,
+            latents=start_code,
+            num_inference_steps=num_step,
+            guidance_scale=1,
+            ref_intermediate_latents=latents_list,
+            control=control,
+            control_scale=1.0,
+            base_resolution=size,
+            strength = strength
+        )
+
+        tar_image = image_masactrl
+
+        # if (_i+1)in (1, 2, 3, 5, 10, 20, 30, 40, 50):
+        #     save_image(image_masactrl.float(), f".cache/_tar_{_i+1}.png")
+        # strength /= 2
 
     return image_masactrl
 
@@ -102,8 +113,13 @@ def main(cfg):
     # elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
     # azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
 
-    elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
-    azim_list = [t*np.pi for t in (5/3, 1, 1/3, 4/3, 0, 2/3, 5/3, 1, 1/3)]
+    elev_list = [t*np.pi for t in (3/4, 3/4, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
+    azim_list = [t*np.pi for t in (5/3, 1/3, 1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+    # elev_list = [t*np.pi for t in (1/3, 1/3, 1/4, )]
+    # azim_list = [t*np.pi for t in (2/3, 4/3, 0, )]
+
+    # elev_list = [t*np.pi for t in (5/6, 1/3, 1/4, 1/4, 1/3)]
+    # azim_list = [t*np.pi for t in (0, 1, 3/2, 1/2, 0)]
 
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
@@ -115,7 +131,9 @@ def main(cfg):
         save_image((mask_model.texture_map!=0).float(), ".cache/mask_res.png")
         for _ in range(5):
             mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
-            loss = torch.nn.functional.l1_loss(mask_out["image"], mask_out["mask"].repeat(1, 3, 1, 1).detach())
+            normal_mask = mask_out["normals"][:, -1:, :, :].clamp(0, 1)
+            normal_mask[normal_mask < 0.4] = 0
+            loss = torch.nn.functional.l1_loss(mask_out["image"], normal_mask.repeat(1, 3, 1, 1).detach())
             loss.backward()
             optim_mask.step()
             optim_mask.zero_grad()
@@ -123,21 +141,22 @@ def main(cfg):
 
         tar_render = tar_uv_model.render([elev], [azim], 3, "white", render_size)
         ref_render = ref_uv_model.render([elev], [azim], 3, "white", render_size)
-
         ref_image = (ref_render["image"] * 2 - 1).half()
         ref_depth = ref_render["depth"]
         tar_image = (tar_render["image"].detach() * 2 - 1).half().cpu().to(device)
         tar_depth = tar_render["depth"].detach().cpu().to(device)
+        normal_map=tar_render["normals"][:, -1:, :, :].clamp(0, 1).cpu().to("cuda:1")
+        normal_map[normal_map < 0.4] = 0
+        
         control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
-
         save_image(tar_render["image"], ".cache/tar.png")
         save_image(tar_depth, ".cache/tar_depth.png")
         save_image(ref_render["image"], ".cache/ref.png")
         save_image(ref_depth, ".cache/ref_depth.png")
+        save_image(normal_map, ".cache/normal.png")
 
         target = sde(model, ref_image, tar_image, control, cfg.model.num_step, cfg.strength, render_size).detach().cpu().to("cuda:1")
         save_image(target, ".cache/target.png")
-
 
         proj_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
         change_mask = (proj_mask != base_mask).int().detach()
@@ -154,23 +173,26 @@ def main(cfg):
         save_image(bound_mask.float(), ".cache/bound_mask.png")
         save_image(fix_mask.float(), ".cache/fix_mask.png")
 
-        last_texture = tar_uv_model.get_texture().detach()
+        last_texture = tar_uv_model.get_texture().detach().clone()
         save_image(last_texture, ".cache/last_texture.png")
         # blur_texture = gaussian_blur(last_texture,9,9)
 
-        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[600, 800], gamma=0.5)
+        
+
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[800], gamma=0.5)
         for i in range(1000):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size, background="white")
-                pl = perceptual_loss(texture_out["image"], target[-1:])[0][0][0][0]
-                ll = torch.nn.functional.l1_loss(texture_out["image"], target[-1:])
-                ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture)
-                bl = 20 * torch.nn.functional.l1_loss(bound_mask*texture_out["texture_map"], bound_mask*last_texture)
-                ol = 100*torch.nn.functional.l1_loss(fix_mask*texture_out["texture_map"], fix_mask*last_texture)
+                
+                pl = perceptual_loss(texture_out["image"]*normal_map, target[-1:]*normal_map)[0][0][0][0]
+                ll = torch.nn.functional.l1_loss(texture_out["image"]*normal_map, target[-1:]*normal_map)
+                ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture, reduction="sum")/torch.sum(unchange_mask)
+                bl = torch.nn.functional.l1_loss(bound_mask*texture_out["texture_map"], bound_mask*last_texture, reduction="sum")/torch.sum(bound_mask)
+                ol = torch.nn.functional.l1_loss(fix_mask*texture_out["texture_map"], fix_mask*last_texture, reduction="sum")/torch.sum(fix_mask)
                 loss = pl + ll + bl + ul + ol
 
-            print(f"{i} pl:{pl}, ll:{ll}, bl:{bl}, ul:{ul}, loss:{loss}", end="\r")
+            print(f"{i} pl:{pl}, ll:{ll}, bl:{bl}, ul:{ul}, ol:{ol}, loss:{loss}", end="\r")
             scaler.scale(loss).backward()
             scaler.step(optim_texture)
             scaler.update()
@@ -180,6 +202,12 @@ def main(cfg):
         last_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
         save_image(texture_out["image"], ".cache/mesa_res.png")
         save_image(tar_uv_model.texture_map, ".cache/texture.png")
+
+        tar_uv_model.save_texture_unet(".cache/unet.pth")
+        cfg.mesh.texture_unet_path = ".cache/unet.pth"
+        tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, True, init_texture=".cache/texture.png", device="cuda:1")
+        # tar_uv_model.refresh()
+        optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     with torch.no_grad():
         res, _ = tar_uv_model.render_all()
         save_image(res, "output/image_all.png")
