@@ -15,11 +15,12 @@ def main(cfg):
     row = cfg.n_c // col
     img_size = (render_size*row, render_size*col)
 
-    ref_img, ref_depth = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/ref_up")
-    tar_img, tar_depth = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/tar_up")
+    ref_img, ref_depth, ref_normal = render_images(cfg.ref_mesh, cfg.ref_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/ref")
+    tar_img, tar_depth, tar_normal = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/tar")
     
     model = load_model(cfg.model, device)
-    control = {"depth": [ref_depth, ref_depth, tar_depth]}
+    # control = {"depth": [ref_depth, ref_depth, tar_depth]}
+    control = {"depth": [ref_normal, ref_normal, tar_normal]}
 
     ref_prompt = ""
     target_prompt = ""
@@ -58,7 +59,7 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=2,
+        control_scale=4,
         base_resolution=img_size,
         strength=strength
     )

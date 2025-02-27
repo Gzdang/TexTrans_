@@ -43,10 +43,10 @@ def main(cfg):
         / 255.0
     )
 
-    optimizer = torch.optim.AdamW(model.parameters(), 1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), 1e-3)
     perceptual_loss = model.set_perceptual_loss(LPIPS(True).to(cfg.device).eval())
     scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 750], gamma=0.5)
-    for i in range(1000):
+    for i in range(200):
         image, _ = model.render_all()
         loss = torch.nn.functional.l1_loss(image, target)
         loss += perceptual_loss(target, image)[0][0][0][0]
@@ -59,7 +59,7 @@ def main(cfg):
 
         # save_image(image, "test.png")
 
-    res, res_ = model.render_all()
+    res, _ = model.render_all()
     save_image(res, "./output/image_l.png")
     save_image(model.texture_map, "./output/texture_l.png")
     model.save_texture_unet("output/unet_l.pth")

@@ -81,13 +81,6 @@ class Render(torch.nn.Module):
             face_vertices_image,
             face_uv_matrix,
         )
-        view_normal, _ = kal.render.mesh.rasterize(
-            self.render_size[1],
-            self.render_size[0],
-            face_vertices_camera[:, :, :, -1],
-            face_vertices_image,
-            face_normal_matrix,
-        )
         view_depth, _ = kal.render.mesh.rasterize(
             self.render_size[1],
             self.render_size[0],
@@ -104,12 +97,12 @@ class Render(torch.nn.Module):
 
         view_uv = view_uv * view_mask
         view_depth = view_depth * view_mask
-        view_normal = (view_normal + 1.0) * 0.5 * view_mask
+        view_normal = face_normals[0][face_idx_uv, :] * view_mask
 
         view_image = view_image.permute(0, 3, 1, 2)
         view_mask = view_mask.permute(0, 3, 1, 2)
         view_depth = view_depth.permute(0, 3, 1, 2)
-        view_normal = view_normal.permute(0, 3, 1, 2)
+        view_normal = view_normal.permute(0, 3, 1, 2).clamp(0,1)
 
         return {
             "image": self.resizer(view_image),
@@ -160,10 +153,9 @@ class Render(torch.nn.Module):
                 face_vertices_camera[:, :, :, -1:],
             )
 
-            depth = self.normalize_depth(depth)
-
             mask = (face_idx > -1).float()[..., None]
-            normal = face_normals[0][face_idx, :]
+            depth = self.normalize_depth(depth)
+            normal = face_normals[0][face_idx, :] * mask
 
             depth = depth.permute(0, 3, 1, 2)
             normal = normal.permute(0, 3, 1, 2)
