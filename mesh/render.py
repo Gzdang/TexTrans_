@@ -58,59 +58,6 @@ class Render(torch.nn.Module):
 
         return depth_map
 
-    def forward(self, mesh, texture, camera):
-        vertex_matrix = mesh.vertices
-        face_matrix = mesh.faces
-        face_uv_matrix = mesh.face_uv_matrix
-        face_normal_matrix = mesh.face_normal_matrix
-
-        (
-            face_vertices_camera,
-            face_vertices_image,
-            face_normals,
-        ) = kal.render.mesh.prepare_vertices(
-            vertex_matrix,
-            face_matrix,
-            self.camera_projection,
-            camera_transform=camera,
-        )
-
-        view_uv, face_idx_uv = kal.render.mesh.rasterize(
-            *self.render_size[::-1],
-            face_vertices_camera[:, :, :, -1],
-            face_vertices_image,
-            face_uv_matrix,
-        )
-        view_depth, _ = kal.render.mesh.rasterize(
-            self.render_size[1],
-            self.render_size[0],
-            face_vertices_camera[:, :, :, -1],
-            face_vertices_image,
-            face_vertices_camera[:, :, :, -1:],
-        )
-        view_depth = self.normalize_depth(view_depth)
-        view_mask = (face_idx_uv > -1).float()[..., None]
-        view_image = kal.render.mesh.texture_mapping(view_uv, texture, mode=self.interpolation_mode)
-
-        # view_image = view_image * view_mask
-        view_image = view_image * view_mask + (1-view_mask)
-
-        view_uv = view_uv * view_mask
-        view_depth = view_depth * view_mask
-        view_normal = face_normals[0][face_idx_uv, :] * view_mask
-
-        view_image = view_image.permute(0, 3, 1, 2)
-        view_mask = view_mask.permute(0, 3, 1, 2)
-        view_depth = view_depth.permute(0, 3, 1, 2)
-        view_normal = view_normal.permute(0, 3, 1, 2).clamp(0,1)
-
-        return {
-            "image": self.resizer(view_image),
-            "depth": self.resizer(view_depth),
-            "mask": self.resizer(view_mask),
-            "normal": self.resizer(view_normal),
-        }
-
     def render_multi_view_texture(
         self,
         verts,
@@ -155,7 +102,7 @@ class Render(torch.nn.Module):
 
             mask = (face_idx > -1).float()[..., None]
             depth = self.normalize_depth(depth)
-            normal = face_normals[0][face_idx, :] * mask
+            normal = (face_normals[0][face_idx, :]+1)*0.5 * mask
 
             depth = depth.permute(0, 3, 1, 2)
             normal = normal.permute(0, 3, 1, 2)
@@ -172,8 +119,74 @@ class Render(torch.nn.Module):
 
         image = kal.render.mesh.texture_mapping(uv_features, texture_map, mode=self.interpolation_mode)
         image = image.permute(0, 3, 1, 2)
-        image = image * mask
+        image = image * mask + (1-mask)
 
         render_cache = {"uv_features": uv_features, "depth": depth, "mask": mask, "normal": normal}
 
         return image, mask, depth, normal, render_cache
+
+
+        # render_image
+    
+    def forward(self, mesh, texture, elev, azim):
+        vertex_matrix = mesh.vertices
+        face_matrix = mesh.faces
+        face_uv_matrix = mesh.face_uv_matrix
+        face_normal_matrix = mesh.face_normal_matrix
+
+        image, mask, depth, normal, _ = self.render_multi_view_texture(
+            mesh.vertices,
+            mesh.faces,
+            mesh.face_uv_matrix,
+            texture,
+            elev,
+            azim,
+            3
+        )
+
+        # (
+        #     face_vertices_camera,
+        #     face_vertices_image,
+        #     face_normals,
+        # ) = kal.render.mesh.prepare_vertices(
+        #     vertex_matrix,
+        #     face_matrix,
+        #     self.camera_projection,
+        #     camera_transform=camera,
+        # )
+
+        # view_uv, face_idx_uv = kal.render.mesh.rasterize(
+        #     *self.render_size[::-1],
+        #     face_vertices_camera[:, :, :, -1],
+        #     face_vertices_image,
+        #     face_uv_matrix,
+        # )
+        # view_depth, _ = kal.render.mesh.rasterize(
+        #     self.render_size[1],
+        #     self.render_size[0],
+        #     face_vertices_camera[:, :, :, -1],
+        #     face_vertices_image,
+        #     face_vertices_camera[:, :, :, -1:],
+        # )
+        # view_depth = self.normalize_depth(view_depth)
+        # view_mask = (face_idx_uv > -1).float()[..., None]
+        # view_image = kal.render.mesh.texture_mapping(view_uv, texture, mode=self.interpolation_mode)
+
+        # # view_image = view_image * view_mask
+        # view_image = view_image * view_mask + (1-view_mask)
+
+        # view_uv = view_uv * view_mask
+        # view_depth = view_depth * view_mask
+        # view_normal = face_normals[0][face_idx_uv, :] * view_mask
+
+        # view_image = view_image.permute(0, 3, 1, 2)
+        # view_mask = view_mask.permute(0, 3, 1, 2)
+        # view_depth = view_depth.permute(0, 3, 1, 2)
+        # view_normal = view_normal.permute(0, 3, 1, 2).clamp(0,1)
+
+        return {
+            "image": self.resizer(image),
+            "depth": self.resizer(depth),
+            "mask": self.resizer(mask),
+            "normal": self.resizer(normal),
+        }

@@ -2,6 +2,7 @@ import torch
 
 import numpy as np
 
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from tqdm import tqdm
 from PIL import Image, PngImagePlugin
 
@@ -56,7 +57,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         if isinstance(image, (Image.Image, PngImagePlugin.PngImageFile)):
             image = np.array(image)
-            image = 2 * (torch.from_numpy(image).float() / 255) - 1
+            image = torch.from_numpy(image).float() / 255
             image = image.permute(2, 0, 1).unsqueeze(0).to(DEVICE)
             if image.shape[1] == 4:
                 image = image[:, :-1, :, :]
@@ -96,7 +97,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         num_inference_steps=50,
         latents=None,
         ref_intermediate_latents=None,
-        control={},
+        control=None,
         control_scale=1,
         strength=1,
         **kwds,
@@ -141,15 +142,17 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         add_text_embeds = add_text_embeds.to(DEVICE)
         add_time_ids = add_time_ids.to(DEVICE)
 
+        
+
         # controlnet preprocess
-        if control.get("depth") is not None:
-            depth = control["depth"]
-            control_image_processor = VaeImageProcessor(
-                vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
-            )
-            control["depth"] = control_image_processor.preprocess(depth, height=height, width=width).to(
-                self.controlnet.device, self.controlnet.dtype
-            )
+        control_image_processor = VaeImageProcessor(
+            vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+        )
+        for idx in range(len(control)):
+            if isinstance(control[idx], torch.Tensor):
+                image = control_image_processor.preprocess(control[idx], height=height, width=width).to(self.controlnet.device, self.controlnet.dtype)
+                height, width = image.shape[-2:]
+                control[idx] = image
 
         self.scheduler.set_timesteps(num_inference_steps)
         start_idx = int(num_inference_steps * strength)
@@ -171,18 +174,18 @@ class MyPipelineXL(StableDiffusionXLPipeline):
 
             model_inputs = latents
 
-            added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
+            added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids, \
+                "control_type":torch.Tensor([0, 0, 0, 0, 1, 0]).reshape(1, -1).to(DEVICE, dtype=prompt_embeds.dtype).repeat(batch_size, 1)}
 
             # predict the noise
             down_block_res_samples = None
             mid_block_res_sample = None
-            if control.get("depth") is not None:
-                depth = control["depth"]
+            if t>200 and control:
                 down_block_depth, mid_block_depth = self.controlnet(
                     model_inputs,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    controlnet_cond=depth,
+                    controlnet_cond_list=control,
                     conditioning_scale=control_scale,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,

@@ -83,8 +83,8 @@ class TexturedMeshModel(nn.Module):
                 filter_size_down=3,
                 upsample_mode="nearest",
                 filter_skip_size=1,
-                need_sigmoid=False,
-                # need_tanh=True,
+                # need_sigmoid=False,
+                need_tanh=True,
                 need_bias=True,
                 pad="reflection",
                 act_fun="LeakyReLU",
@@ -204,6 +204,7 @@ class TexturedMeshModel(nn.Module):
         radius=None,
         background=None,
         dim=512,
+        render_cache=None,
     ):
         augmented_vertices = self.mesh.vertices
 
@@ -214,7 +215,7 @@ class TexturedMeshModel(nn.Module):
             texture_img = self.texture_map
 
         with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
-            images, mask, depth, normals, _ = self.renderer.render_multi_view_texture(
+            images, mask, depth, normal, render_cache = self.renderer.render_multi_view_texture(
                 augmented_vertices,
                 self.mesh.faces,
                 self.face_attributes,
@@ -223,7 +224,7 @@ class TexturedMeshModel(nn.Module):
                 azim=phi,
                 radius=radius,
                 look_at_height=self.dy,
-                render_cache=None,
+                render_cache=render_cache,
                 dims=(dim, dim),
             )
 
@@ -242,8 +243,9 @@ class TexturedMeshModel(nn.Module):
             "image": images,
             "mask": mask,
             "depth": depth,
-            "normals": normals,
+            "normal": normal,
             "texture_map": texture_img,
+            "render_cache": render_cache
         }
 
     def reshape_image(self, image_batch):
@@ -256,11 +258,11 @@ class TexturedMeshModel(nn.Module):
             cols.append(torch.cat(images.chunk(col), -1))
         return torch.cat(cols, -2)
 
-    def render_all(self):        
-        res = self.render(self.elev_list, self.azim_list, 3, dim=self.render_size)
-        img_res = self.reshape_image(res["image"])
-        mask_res = self.reshape_image(res["mask"])
-        return img_res, mask_res
+    def render_all(self, render_cache=None):        
+        res = self.render(self.elev_list, self.azim_list, 3, dim=self.render_size, render_cache=render_cache)
+        res["image"] = self.reshape_image(res["image"])
+        res["mask"] = self.reshape_image(res["mask"])
+        return res
     
     def project_all(self, target):
         # self.init_texture_map()

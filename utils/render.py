@@ -19,9 +19,8 @@ def get_camera_list(n_c=9):
     elif n_c == 4:
         elev_list = [t*np.pi for t in (1/2, 1/2, 1/2, 1/2)]
         azim_list = [t*np.pi for t in (0, 1/2, 1, 3/2)]
-    
-    camera_list = list(zip(elev_list, azim_list))
-    return camera_list
+
+    return elev_list, azim_list
 
 def load_texture_map(texture_path):
         texture = torch.tensor(
@@ -43,21 +42,23 @@ def render_images(mesh_path, texture_path=None, size=512, n_c=9, out_path=".cach
     texture = torch.ones([1, 3, 1024, 1024])
     if texture_path is not None:
         texture = load_texture_map(texture_path)
-    view_list = get_camera_list(n_c)
+    elev_list, azim_list = get_camera_list(n_c)
     res_rgb_list = []
     res_depth_list = []
     res_normal_list = []
 
-    # 可以考虑改为并行的，但没啥必要
-    for view in view_list:
-        camera_view = render.get_camera_from_view(view[0], view[1])
-        res = render(mesh.to("cuda"), texture.cuda(), camera_view.cuda())
-        res_rgb_list.append(res["image"].cpu())
-        res_depth_list.append(res["depth"].cpu())
-        res_normal_list.append(res["normal"].cpu())
+    render_res = render(mesh.to("cuda"), texture.cuda(), elev_list, azim_list)
 
-    save_image(torch.cat(res_rgb_list), os.path.join(out_path, f"all_rgb.png"), nrow=math.floor(n_c**0.5), padding=0)
-    save_image(torch.cat(res_depth_list), os.path.join(out_path, f"all_depth.png"), nrow=math.floor(n_c**0.5), padding=0)
-    save_image(torch.cat(res_normal_list), os.path.join(out_path, f"all_normal.png"), nrow=math.floor(n_c**0.5), padding=0)
+    # 可以考虑改为并行的，但没啥必要
+    # for view in view_list:
+    #     camera_view = render.get_camera_from_view(view[0], view[1])
+    #     res = render(mesh.to("cuda"), texture.cuda(), camera_view.cuda())
+    #     res_rgb_list.append(res["image"].cpu())
+    #     res_depth_list.append(res["depth"].cpu())
+    #     res_normal_list.append(res["normal"].cpu())
+
+    save_image(render_res["image"], os.path.join(out_path, f"all_rgb.png"), nrow=math.floor(n_c**0.5), padding=0)
+    save_image(render_res["depth"], os.path.join(out_path, f"all_depth.png"), nrow=math.floor(n_c**0.5), padding=0)
+    save_image(render_res["normal"], os.path.join(out_path, f"all_normal.png"), nrow=math.floor(n_c**0.5), padding=0)
 
     return Image.open(os.path.join(out_path, f"all_rgb.png")), Image.open(os.path.join(out_path, f"all_depth.png")), Image.open(os.path.join(out_path, f"all_normal.png"))

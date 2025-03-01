@@ -14,6 +14,8 @@ from mesh.textured_mesh import TexturedMeshModel
 from diffusers.image_processor import VaeImageProcessor
 from transformers import CLIPImageProcessor
 
+from masactrl.controlnet_union import ControlNetModel_Union
+
 
 def load_confg(base_path, cfg_name):
     cfg_dir = os.path.join(base_path, cfg_name)
@@ -43,7 +45,8 @@ def load_model(cfg, device):
     if cfg.get("type", "sd15") == "sdxl":
         model = MyPipelineXL.from_pretrained(cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16).to(device)
         model.vae.to(dtype=torch.float32)
-        controlnet = ControlNetModel.from_pretrained(cfg.controlnet, variant="fp16", torch_dtype=torch.float16).eval()
+        # controlnet = ControlNetModel.from_pretrained(cfg.controlnet, variant="fp16", torch_dtype=torch.float16).eval()
+        controlnet = ControlNetModel_Union.from_pretrained(cfg.controlnet, torch_dtype=torch.float16, use_safetensors=True)
     else:
         model = MyPipeline.from_pretrained(cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16).to(device)
         controlnet = ControlNetModel.from_pretrained(cfg.controlnet, torch_dtype=torch.float16).eval()

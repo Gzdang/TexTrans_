@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 
+from torch import GradScaler
 from omegaconf import OmegaConf
 from PIL import Image
 from torchvision.utils import save_image
@@ -45,22 +46,27 @@ def main(cfg):
 
     optimizer = torch.optim.AdamW(model.parameters(), 1e-3)
     perceptual_loss = model.set_perceptual_loss(LPIPS(True).to(cfg.device).eval())
-    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 750], gamma=0.5)
-    for i in range(200):
-        image, _ = model.render_all()
-        loss = torch.nn.functional.l1_loss(image, target)
-        loss += perceptual_loss(target, image)[0][0][0][0]
-        print(f"{i}: {loss}", end="\r" if i < 999 else "\n")
+    scaler = GradScaler()
 
-        loss.backward()
-        optimizer.step()
+    render_cache = None
+    for i in range(300):
         optimizer.zero_grad()
-        scheduler.step()
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
+            render_res = model.render_all(render_cache)
+            image = render_res["image"]
+            render_cache = render_res["render_cache"]
+            loss = torch.nn.functional.l1_loss(image, target)
+            loss += perceptual_loss(target, image)[0][0][0][0]
+            print(f"{i}: {loss}", end="\r" if i < 999 else "\n")
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
         # save_image(image, "test.png")
 
-    res, _ = model.render_all()
-    save_image(res, "./output/image_l.png")
+    render_res = model.render_all()
+    save_image(render_res["image"], "./output/image_l.png")
     save_image(model.texture_map, "./output/texture_l.png")
     model.save_texture_unet("output/unet_l.pth")
 

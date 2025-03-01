@@ -14,7 +14,6 @@ from torchvision.transforms.functional import gaussian_blur
 
 def sde(model, ref_image, tar_image, control, num_step, strength, size):
     source_prompt, target_prompt = "", ""
-    # prompts = [source_prompt, target_prompt] 
     prompts = [source_prompt, source_prompt, target_prompt] 
 
     reset_attn(model) 
@@ -58,8 +57,8 @@ def sde(model, ref_image, tar_image, control, num_step, strength, size):
 
         tar_image = image_masactrl
 
-        # if (_i+1)in (1, 2, 3, 5, 10, 20, 30, 40, 50):
-        #     save_image(image_masactrl.float(), f".cache/_tar_{_i+1}.png")
+        if (_i+1)in (1, 2, 3, 5, 10, 20, 30, 40, 50):
+            save_image(image_masactrl.float(), f".cache/_tar_{_i+1}.png")
         # strength /= 2
 
     return image_masactrl
@@ -69,8 +68,8 @@ def gen_mask(cfg, mesh_path, render_size):
     mask_model.texture_map = torch.nn.Parameter(torch.zeros_like(mask_model.texture_map))
     optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
     for _ in range(5):
-        image, mask = mask_model.render_all()
-        loss = torch.nn.functional.l1_loss(image, mask.detach())
+        render_res = mask_model.render_all()
+        loss = torch.nn.functional.l1_loss(render_res["image"], render_res["mask"].detach().repeat((1,3,1,1)))
         loss.backward()
         optim_mask.step()
         optim_mask.zero_grad()
@@ -113,54 +112,77 @@ def main(cfg):
     # elev_list = [t*np.pi for t in (1/3, 11/18, 1/3, 11/18, 1/3, 11/18,)]
     # azim_list = [t*np.pi for t in (30/180, 90/180, 150/180, 210/180, 270/180, 330/180)]
 
-    elev_list = [t*np.pi for t in (3/4, 3/4, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
-    azim_list = [t*np.pi for t in (5/3, 1/3, 1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+    # elev_list = [t*np.pi for t in (3/4, 3/4, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
+    # azim_list = [t*np.pi for t in (1, 1/3, 5/3, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+    elev_list = [t*np.pi for t in (3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
+    azim_list = [t*np.pi for t in (1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+
     # elev_list = [t*np.pi for t in (1/3, 1/3, 1/4, )]
     # azim_list = [t*np.pi for t in (2/3, 4/3, 0, )]
 
     # elev_list = [t*np.pi for t in (5/6, 1/3, 1/4, 1/4, 1/3)]
     # azim_list = [t*np.pi for t in (0, 1, 3/2, 1/2, 0)]
 
+
+    optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
     perceptual_loss = LPIPS(True).to("cuda:1").eval()
 
     for elev, azim in zip(elev_list, azim_list):
-        mask_model.init_textures()
-        optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
-        save_image((mask_model.texture_map!=0).float(), ".cache/mask_res.png")
-        for _ in range(5):
+        ref_render = ref_uv_model.render([elev], [azim], 3, "white", render_size)
+        ref_image = ref_render["image"].half()
+        ref_depth = ref_render["depth"]
+        ref_normal = ref_render["normal"]
+
+        tar_render = tar_uv_model.render([elev], [azim], 3, "white", render_size)
+        tar_image = tar_render["image"].detach().half().cpu().to(device)
+        tar_depth = tar_render["depth"].detach().cpu().to(device)
+        tar_normal = tar_render["normal"].detach().cpu().to(device)
+
+        save_image(tar_render["image"], ".cache/tar.png")
+        save_image(tar_depth, ".cache/tar_depth.png")
+        save_image(tar_normal, ".cache/tar_normal.png")
+        save_image(ref_render["image"], ".cache/ref.png")
+        save_image(ref_depth, ".cache/ref_depth.png")
+        save_image(ref_normal, ".cache/ref_normal.png")
+
+        mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
+        last_normal_tex = mask_model.texture_map.detach().clone()
+        last_normal = mask_out["image"][:, -1:, :, :].clamp(0, 1)
+        cur_normal=tar_render["normal"][:, -1:, :, :].clamp(0, 1).cpu().to("cuda:0")
+        cur_normal[cur_normal < last_normal] = 0
+        update_normal = last_normal * (cur_normal < last_normal) + cur_normal
+        # save_image(last_normal, ".cache/last_normal.png")
+        # save_image(update_normal, ".cache/update_normal.png")
+        # save_image(normal_map, ".cache/normal.png")
+        # save_image(last_normal_tex, ".cache/last_normal_tex.png")
+        
+        for _ in range(100):
             mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
-            normal_mask = mask_out["normals"][:, -1:, :, :].clamp(0, 1)
-            normal_mask[normal_mask < 0.4] = 0
-            loss = torch.nn.functional.l1_loss(mask_out["image"], normal_mask.repeat(1, 3, 1, 1).detach())
+            loss = torch.nn.functional.l1_loss(mask_out["image"], update_normal.repeat(1, 3, 1, 1).detach())
+            print(loss, end="\r")
             loss.backward()
             optim_mask.step()
             optim_mask.zero_grad()
-        save_image((mask_model.texture_map!=0).float(), ".cache/mask_res.png")
+        save_image(mask_model.texture_map, ".cache/mask_res.png")
 
-        tar_render = tar_uv_model.render([elev], [azim], 3, "white", render_size)
-        ref_render = ref_uv_model.render([elev], [azim], 3, "white", render_size)
-        ref_image = (ref_render["image"] * 2 - 1).half()
-        ref_depth = ref_render["depth"]
-        tar_image = (tar_render["image"].detach() * 2 - 1).half().cpu().to(device)
-        tar_depth = tar_render["depth"].detach().cpu().to(device)
-        normal_map=tar_render["normals"][:, -1:, :, :].clamp(0, 1).cpu().to("cuda:1")
-        normal_map[normal_map < 0.4] = 0
+        normal_mask = gaussian_blur(cur_normal, 15, 9)
+        normal_mask = (tar_render["mask"]*(cur_normal>0.2).to("cuda:1"))
+        save_image(normal_mask, ".cache/normal_mask.png")
         
-        control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
-        save_image(tar_render["image"], ".cache/tar.png")
-        save_image(tar_depth, ".cache/tar_depth.png")
-        save_image(ref_render["image"], ".cache/ref.png")
-        save_image(ref_depth, ".cache/ref_depth.png")
-        save_image(normal_map, ".cache/normal.png")
+        # 0 -- openpose
+        # 1 -- depth
+        # 2 -- hed/pidi/scribble/ted
+        # 3 -- canny/lineart/anime_lineart/mlsd
+        # 4 -- normal
+        # 5 -- segment
+        control = [0, 0, 0, 0, 0, 0]
+        control[1] = torch.cat([ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)])
+        control[4] = torch.cat([ref_normal, ref_normal, tar_normal])
+        # control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
 
-        target = sde(model, ref_image, tar_image, control, cfg.model.num_step, cfg.strength, render_size).detach().cpu().to("cuda:1")
-        save_image(target, ".cache/target.png")
-
-        proj_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
-        change_mask = (proj_mask != base_mask).int().detach()
-        # change_mask = (proj_mask != last_mask).int().detach()
+        change_mask = (torch.abs(mask_model.texture_map[:, -1:, :, :] - last_normal_tex[:, -1:, :, :])>0.05).detach().int().cpu().to("cuda:1")
         save_image(change_mask.float(), ".cache/change_mask.png")
         _change_mask = gaussian_blur(change_mask.float(), 15, 9)
         unchange_mask = (_change_mask<0.8).int().detach()
@@ -175,18 +197,18 @@ def main(cfg):
 
         last_texture = tar_uv_model.get_texture().detach().clone()
         save_image(last_texture, ".cache/last_texture.png")
-        # blur_texture = gaussian_blur(last_texture,9,9)
 
-        
+        target = sde(model, ref_image, tar_image, control, cfg.model.num_step, cfg.strength, render_size).detach().cpu().to("cuda:1")
+        save_image(target, ".cache/target.png")
 
         scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[800], gamma=0.5)
         for i in range(1000):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
-                texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size, background="white")
+                texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size, background="white", render_cache=tar_render["render_cache"])
                 
-                pl = perceptual_loss(texture_out["image"]*normal_map, target[-1:]*normal_map)[0][0][0][0]
-                ll = torch.nn.functional.l1_loss(texture_out["image"]*normal_map, target[-1:]*normal_map)
+                pl = perceptual_loss(texture_out["image"]*normal_mask, target[-1:]*normal_mask)[0][0][0][0]
+                ll = torch.nn.functional.l1_loss(texture_out["image"]*normal_mask, target[-1:]*normal_mask)
                 ul = torch.nn.functional.l1_loss(unchange_mask*texture_out["texture_map"], unchange_mask*last_texture, reduction="sum")/torch.sum(unchange_mask)
                 bl = torch.nn.functional.l1_loss(bound_mask*texture_out["texture_map"], bound_mask*last_texture, reduction="sum")/torch.sum(bound_mask)
                 ol = torch.nn.functional.l1_loss(fix_mask*texture_out["texture_map"], fix_mask*last_texture, reduction="sum")/torch.sum(fix_mask)
@@ -199,7 +221,6 @@ def main(cfg):
             scheduler.step()
 
         print()
-        last_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
         save_image(texture_out["image"], ".cache/mesa_res.png")
         save_image(tar_uv_model.texture_map, ".cache/texture.png")
 
@@ -209,8 +230,8 @@ def main(cfg):
         # tar_uv_model.refresh()
         optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     with torch.no_grad():
-        res, _ = tar_uv_model.render_all()
-        save_image(res, "output/image_all.png")
+        render_res = tar_uv_model.render_all()
+        save_image(render_res["image"], "output/image_all.png")
         save_image(tar_uv_model.texture_map, "output/texture.png")
         tar_uv_model.save_texture_unet(".cache/unet.pth")
 

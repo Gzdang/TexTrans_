@@ -216,11 +216,17 @@ class MyPipeline(StableDiffusionPipeline):
                             for samples_prev, samples_curr in zip(down_block_res_samples, down_block_depth)
                         ]
                         mid_block_res_sample += mid_block_depth
+                    down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2]]) for t in down_block_res_samples]
+                    mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2]])
                 return down_block_res_samples, mid_block_res_sample
             
-            down_block_res_samples, mid_block_res_sample = get_control()
-            down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2]]) for t in down_block_res_samples]
-            mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2]])
+            if t < 600:
+                down_block_res_samples, mid_block_res_sample = get_control()
+            else:
+                down_block_res_samples = None
+                mid_block_res_sample = None
+
+                
             # down_block_res_samples = [torch.stack([torch.zeros_like(t[0]), t[1], t[2], t[3]]) for t in down_block_res_samples]
             # mid_block_res_sample = torch.stack([torch.zeros_like(mid_block_res_sample[0]), mid_block_res_sample[1], mid_block_res_sample[2], mid_block_res_sample[3]])
             @torch.no_grad()
