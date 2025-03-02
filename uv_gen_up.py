@@ -19,8 +19,8 @@ def main(cfg):
     tar_img, tar_depth, tar_normal = render_images(cfg.tar_mesh, cfg.tar_texture, size=render_size, n_c=cfg.n_c, out_path=".cache/tar")
     
     model = load_model(cfg.model, device)
-    # control = {"depth": [ref_depth, ref_depth, tar_depth]}
-    control = {"depth": [ref_normal, ref_normal, tar_normal]}
+    control = {"depth": [ref_depth, ref_depth, tar_depth]}
+    # control = {"depth": [ref_normal, ref_normal, tar_normal]}
 
     ref_prompt = ""
     target_prompt = ""

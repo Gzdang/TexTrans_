@@ -177,10 +177,10 @@ def main(cfg):
         # 3 -- canny/lineart/anime_lineart/mlsd
         # 4 -- normal
         # 5 -- segment
-        control = [0, 0, 0, 0, 0, 0]
-        control[1] = torch.cat([ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)])
-        control[4] = torch.cat([ref_normal, ref_normal, tar_normal])
-        # control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
+        # control = [0, 0, 0, 0, 0, 0]
+        # control[1] = torch.cat([ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)])
+        # control[4] = torch.cat([ref_normal, ref_normal, tar_normal])
+        control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
 
         change_mask = (torch.abs(mask_model.texture_map[:, -1:, :, :] - last_normal_tex[:, -1:, :, :])>0.05).detach().int().cpu().to("cuda:1")
         save_image(change_mask.float(), ".cache/change_mask.png")

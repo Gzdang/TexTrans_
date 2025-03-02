@@ -145,14 +145,22 @@ class MyPipelineXL(StableDiffusionXLPipeline):
         
 
         # controlnet preprocess
-        control_image_processor = VaeImageProcessor(
-            vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
-        )
-        for idx in range(len(control)):
-            if isinstance(control[idx], torch.Tensor):
-                image = control_image_processor.preprocess(control[idx], height=height, width=width).to(self.controlnet.device, self.controlnet.dtype)
-                height, width = image.shape[-2:]
-                control[idx] = image
+        if control.get("depth") is not None:
+            depth = control["depth"]
+            control_image_processor = VaeImageProcessor(
+                vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+            )
+            control = control_image_processor.preprocess(depth, height=height, width=width).to(
+                self.controlnet.device, self.controlnet.dtype
+            )
+        # control_image_processor = VaeImageProcessor(
+        #     vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+        # )
+        # for idx in range(len(control)):
+        #     if isinstance(control[idx], torch.Tensor):
+        #         image = control_image_processor.preprocess(control[idx], height=height, width=width).to(self.controlnet.device, self.controlnet.dtype)
+        #         height, width = image.shape[-2:]
+        #         control[idx] = image
 
         self.scheduler.set_timesteps(num_inference_steps)
         start_idx = int(num_inference_steps * strength)
@@ -180,12 +188,14 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             # predict the noise
             down_block_res_samples = None
             mid_block_res_sample = None
-            if t>200 and control:
+            if True:
+            # if t>200 and control:
                 down_block_depth, mid_block_depth = self.controlnet(
                     model_inputs,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    controlnet_cond_list=control,
+                    controlnet_cond=control,
+                    # controlnet_cond_list=control,
                     conditioning_scale=control_scale,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
