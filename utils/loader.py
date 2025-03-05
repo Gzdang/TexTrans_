@@ -45,8 +45,8 @@ def load_model(cfg, device):
     if cfg.get("type", "sd15") == "sdxl":
         model = MyPipelineXL.from_pretrained(cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16).to(device)
         model.vae.to(dtype=torch.float32)
-        controlnet = ControlNetModel.from_pretrained(cfg.controlnet, variant="fp16", torch_dtype=torch.float16).eval()
-        # controlnet = ControlNetModel_Union.from_pretrained(cfg.controlnet, torch_dtype=torch.float16, use_safetensors=True)
+        # controlnet = ControlNetModel.from_pretrained(cfg.controlnet, variant="fp16", torch_dtype=torch.float16).eval()
+        controlnet = ControlNetModel_Union.from_pretrained(cfg.controlnet, torch_dtype=torch.float16, use_safetensors=True)
     else:
         model = MyPipeline.from_pretrained(cfg.base_model, scheduler=scheduler, torch_dtype=torch.float16).to(device)
         controlnet = ControlNetModel.from_pretrained(cfg.controlnet, torch_dtype=torch.float16).eval()

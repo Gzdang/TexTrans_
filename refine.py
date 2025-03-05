@@ -136,7 +136,7 @@ def main(cfg):
         ref_normal = ref_render["normal"]
 
         tar_render = tar_uv_model.render([elev], [azim], 3, "white", render_size)
-        tar_image = tar_render["image"].detach().half().cpu().to(device)
+        tar_image = tar_render["image"].clamp(0,1).detach().half().cpu().to(device)
         tar_depth = tar_render["depth"].detach().cpu().to(device)
         tar_normal = tar_render["normal"].detach().cpu().to(device)
 
@@ -168,7 +168,7 @@ def main(cfg):
         save_image(mask_model.texture_map, ".cache/mask_res.png")
 
         normal_mask = gaussian_blur(cur_normal, 15, 9)
-        normal_mask = (tar_render["mask"]*(cur_normal>0.2).to("cuda:1"))
+        normal_mask = (tar_render["mask"]*(normal_mask>0.2).to("cuda:1"))
         save_image(normal_mask, ".cache/normal_mask.png")
         
         # 0 -- openpose
@@ -177,10 +177,10 @@ def main(cfg):
         # 3 -- canny/lineart/anime_lineart/mlsd
         # 4 -- normal
         # 5 -- segment
-        # control = [0, 0, 0, 0, 0, 0]
-        # control[1] = torch.cat([ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)])
+        control = [0, 0, 0, 0, 0, 0]
+        control[1] = torch.cat([ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)])
         # control[4] = torch.cat([ref_normal, ref_normal, tar_normal])
-        control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
+        # control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
 
         change_mask = (torch.abs(mask_model.texture_map[:, -1:, :, :] - last_normal_tex[:, -1:, :, :])>0.05).detach().int().cpu().to("cuda:1")
         save_image(change_mask.float(), ".cache/change_mask.png")
