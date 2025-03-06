@@ -85,7 +85,7 @@ def main(cfg):
     # load image
     cfg.mesh.n_c = cfg.n_c
     gen_mask(cfg.mesh, cfg.tar_mesh, 512)
-    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, True, init_texture=cfg.tar_texture, device="cuda:1")
+    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=cfg.tar_texture, device="cuda:1")
     mask_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=".cache/_mask.png")
     ref_uv_model = load_uv_model(cfg.mesh, cfg.ref_mesh, render_size, False, init_texture=cfg.ref_texture)
     ref_uv_model.requires_grad_(False)
@@ -161,7 +161,6 @@ def main(cfg):
         for _ in range(100):
             mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
             loss = torch.nn.functional.l1_loss(mask_out["image"], update_normal.repeat(1, 3, 1, 1).detach())
-            print(loss, end="\r")
             loss.backward()
             optim_mask.step()
             optim_mask.zero_grad()
@@ -214,7 +213,7 @@ def main(cfg):
                 ol = torch.nn.functional.l1_loss(fix_mask*texture_out["texture_map"], fix_mask*last_texture, reduction="sum")/torch.sum(fix_mask)
                 loss = pl + ll + bl + ul + ol
 
-            print(f"{i} pl:{pl}, ll:{ll}, bl:{bl}, ul:{ul}, ol:{ol}, loss:{loss}", end="\r")
+            print(f"{i} pl:{pl:.4f}, ll:{ll:.4f}, bl:{bl:.4f}, ul:{ul:.4f}, ol:{ol:.4f}, loss:{loss:.4f}", end="\r")
             scaler.scale(loss).backward()
             scaler.step(optim_texture)
             scaler.update()
