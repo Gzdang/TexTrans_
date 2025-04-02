@@ -46,10 +46,11 @@ def main(cfg):
 
     optimizer = torch.optim.AdamW(model.parameters(), 1e-3)
     perceptual_loss = model.set_perceptual_loss(LPIPS(True).to(cfg.device).eval())
+    scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[500, 700], gamma=0.5)
     scaler = GradScaler()
 
     render_cache = None
-    for i in range(300):
+    for i in range(800):
         optimizer.zero_grad()
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             render_res = model.render_all(render_cache)
@@ -62,6 +63,7 @@ def main(cfg):
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+            scheduler.step()
 
         # save_image(image, "test.png")
 

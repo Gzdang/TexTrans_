@@ -84,11 +84,12 @@ def main(cfg):
 
     # load image
     cfg.mesh.n_c = cfg.n_c
-    gen_mask(cfg.mesh, cfg.tar_mesh, 512)
-    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=cfg.tar_texture, device="cuda:1")
-    mask_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=".cache/_mask.png")
+    tar_uv_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, True, init_texture=cfg.tar_texture, device="cuda:1")
     ref_uv_model = load_uv_model(cfg.mesh, cfg.ref_mesh, render_size, False, init_texture=cfg.ref_texture)
     ref_uv_model.requires_grad_(False)
+
+    gen_mask(cfg.mesh, cfg.tar_mesh, 512)
+    mask_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=".cache/_mask.png")
 
     base_texture = tar_uv_model.get_texture().detach()
     base_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
@@ -114,8 +115,12 @@ def main(cfg):
 
     # elev_list = [t*np.pi for t in (3/4, 3/4, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
     # azim_list = [t*np.pi for t in (1, 1/3, 5/3, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
-    elev_list = [t*np.pi for t in (3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
-    azim_list = [t*np.pi for t in (1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+    # elev_list = [t*np.pi for t in (1/3, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
+    # azim_list = [t*np.pi for t in (0, 1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
+    elev_list = [t*np.pi for t in (1/3, 1/3, 1/3, 1/3, 1/3, 1/3, )]
+    azim_list = [t*np.pi for t in (1, 4/3, 2/3, 5/3, 1/3, 0, )]
+    # elev_list = [t*np.pi for t in (1/3,)]
+    # azim_list = [t*np.pi for t in (0,)]
 
     # elev_list = [t*np.pi for t in (1/3, 1/3, 1/4, )]
     # azim_list = [t*np.pi for t in (2/3, 4/3, 0, )]
@@ -125,6 +130,7 @@ def main(cfg):
 
 
     optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
+    mask_sc=torch.optim.lr_scheduler.MultiStepLR(optim_mask, milestones=[100], gamma=0.1)
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
     perceptual_loss = LPIPS(True).to("cuda:1").eval()
@@ -151,24 +157,30 @@ def main(cfg):
         last_normal_tex = mask_model.texture_map.detach().clone()
         last_normal = mask_out["image"][:, -1:, :, :].clamp(0, 1)
         cur_normal=tar_render["normal"][:, -1:, :, :].clamp(0, 1).cpu().to("cuda:0")
-        cur_normal[cur_normal < last_normal] = 0
-        update_normal = last_normal * (cur_normal < last_normal) + cur_normal
+        cm = cur_normal < last_normal
+        cur_normal[cm] = 0
+        update_normal = last_normal * cm + cur_normal
+        # save_image((cur_normal.cpu() + 1-tar_render["mask"].cpu()), ".cache/lcur_normal.png")
         # save_image(last_normal, ".cache/last_normal.png")
         # save_image(update_normal, ".cache/update_normal.png")
-        # save_image(normal_map, ".cache/normal.png")
-        # save_image(last_normal_tex, ".cache/last_normal_tex.png")
+        # save_image(cur_normal, ".cache/cur_normal.png")
         
-        for _ in range(100):
+        # save_image(last_normal_tex, ".cache/last_normal_tex.png")
+
+        for _ in range(200):
             mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
             loss = torch.nn.functional.l1_loss(mask_out["image"], update_normal.repeat(1, 3, 1, 1).detach())
             loss.backward()
             optim_mask.step()
             optim_mask.zero_grad()
+            mask_sc.step()
         save_image(mask_model.texture_map, ".cache/mask_res.png")
 
         normal_mask = gaussian_blur(cur_normal, 15, 9)
         normal_mask = (tar_render["mask"]*(normal_mask>0.2).to("cuda:1"))
         save_image(normal_mask, ".cache/normal_mask.png")
+
+        # sleep(2)
         
         # 0 -- openpose
         # 1 -- depth
@@ -200,8 +212,8 @@ def main(cfg):
         target = sde(model, ref_image, tar_image, control, cfg.model.num_step, cfg.strength, render_size).detach().cpu().to("cuda:1")
         save_image(target, ".cache/target.png")
 
-        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[800], gamma=0.5)
-        for i in range(1000):
+        scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[400, 600, 700], gamma=0.5)
+        for i in range(800):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 texture_out = tar_uv_model.render([elev], [azim], 3, dim=render_size, background="white", render_cache=tar_render["render_cache"])

@@ -60,7 +60,7 @@ def main(cfg):
         guidance_scale=1,
         ref_intermediate_latents=latents_list,
         control=control,
-        control_scale=4,
+        control_scale=2,
         base_resolution=img_size,
         # uv_model = tar_uv_model
     )

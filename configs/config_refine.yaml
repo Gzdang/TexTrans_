@@ -6,7 +6,8 @@ model:
   num_step: 50
   type: "sdxl"
   base_model: "./resource/diffuser/sdxl_base"
-  controlnet: "./resource/diffuser/sdxl_controlnet"
+  # controlnet: "./resource/diffuser/sdxl_controlnet"
+  controlnet: "./resource/diffuser/sdxl_controlnet_union"
 mesh:
   path: "dataset/future/Desk"
   shape_scale: 1

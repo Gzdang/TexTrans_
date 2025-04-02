@@ -189,7 +189,7 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             down_block_res_samples = None
             mid_block_res_sample = None
             # if True:
-            if t>200 and control:
+            if t>150 and control:
                 down_block_depth, mid_block_depth = self.controlnet(
                     model_inputs,
                     t,
@@ -349,6 +349,6 @@ class MyPipelineXL(StableDiffusionXLPipeline):
             latents_list.append(latents)
             pred_x0_list.append(pred_x0)
 
-        save_image(self.latent2image(latents.float(), "pt"), "test_.png")
+        # save_image(self.latent2image(latents.float(), "pt"), "test_.png")
 
         return latents, latents_list
