@@ -90,10 +90,8 @@ def main(cfg):
 
     gen_mask(cfg.mesh, cfg.tar_mesh, 512)
     mask_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=".cache/_mask.png")
-
-    base_texture = tar_uv_model.get_texture().detach()
-    base_mask = (mask_model.texture_map != 0).detach().cpu().to("cuda:1")
-    last_mask = base_mask
+    
+    base_mask = mask_model.texture_map.detach().cpu().to("cuda:1")
 
     # if cfg.n_c == 9:
     #     elev_list = [t*np.pi for t in (1/4, 1/4, 1/4, 1/2, 1/2, 1/2, 3/4, 3/4, 3/4)]
@@ -117,7 +115,7 @@ def main(cfg):
     # azim_list = [t*np.pi for t in (1, 1/3, 5/3, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
     # elev_list = [t*np.pi for t in (1/3, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
     # azim_list = [t*np.pi for t in (0, 1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
-    elev_list = [t*np.pi for t in (1/3, 1/3, 1/3, 1/3, 1/3, 1/3, )]
+    elev_list = [t*np.pi for t in (1/3, 1/4, 1/4, 1/4, 1/4, 1/3, )]
     azim_list = [t*np.pi for t in (1, 4/3, 2/3, 5/3, 1/3, 0, )]
     # elev_list = [t*np.pi for t in (1/3,)]
     # azim_list = [t*np.pi for t in (0,)]
@@ -129,8 +127,6 @@ def main(cfg):
     # azim_list = [t*np.pi for t in (0, 1, 3/2, 1/2, 0)]
 
 
-    optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
-    mask_sc=torch.optim.lr_scheduler.MultiStepLR(optim_mask, milestones=[100], gamma=0.1)
     optim_texture = torch.optim.Adam(tar_uv_model.parameters(), 1e-3)
     scaler = GradScaler()
     perceptual_loss = LPIPS(True).to("cuda:1").eval()
@@ -167,6 +163,8 @@ def main(cfg):
         
         # save_image(last_normal_tex, ".cache/last_normal_tex.png")
 
+        optim_mask = torch.optim.Adam(mask_model.parameters(), 1e-2)
+        mask_sc=torch.optim.lr_scheduler.MultiStepLR(optim_mask, milestones=[100], gamma=0.1)
         for _ in range(200):
             mask_out = mask_model.render([elev], [azim], 3, dim=render_size)
             loss = torch.nn.functional.l1_loss(mask_out["image"], update_normal.repeat(1, 3, 1, 1).detach())
@@ -193,7 +191,18 @@ def main(cfg):
         # control[4] = torch.cat([ref_normal, ref_normal, tar_normal])
         # control = {"depth": [ref_depth.repeat(1, 3, 1, 1), ref_depth.repeat(1, 3, 1, 1), tar_depth.repeat(1, 3, 1, 1)]}
 
-        change_mask = (torch.abs(mask_model.texture_map[:, -1:, :, :] - last_normal_tex[:, -1:, :, :])>0.05).detach().int().cpu().to("cuda:1")
+        change_model = load_uv_model(cfg.mesh, cfg.tar_mesh, render_size, False, init_texture=".cache/_mask.png")
+        optim_change = torch.optim.Adam(change_model.parameters(), 1e-1)
+        _normal_mask = normal_mask.repeat(1, 3, 1, 1).detach().to("cuda:0")
+        for _ in range(10):
+            change_out = change_model.render([elev], [azim], 3, dim=render_size)
+            loss = torch.nn.functional.l1_loss(change_out["image"], _normal_mask)
+            loss.backward()
+            optim_change.step()
+            optim_change.zero_grad()
+
+        change_mask = change_model.texture_map.detach().cpu().to("cuda:1")
+        change_mask = (change_mask!=base_mask).int()
         save_image(change_mask.float(), ".cache/change_mask.png")
         _change_mask = gaussian_blur(change_mask.float(), 15, 9)
         unchange_mask = (_change_mask<0.8).int().detach()
