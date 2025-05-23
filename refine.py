@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import cv2
+import time
 
 from PIL import Image, ImageFilter
 from torch import GradScaler
@@ -116,7 +117,7 @@ def main(cfg):
     # elev_list = [t*np.pi for t in (1/3, 3/4, 1/4, 1/4, 1/4, 1/2, 1/2, 1/3, )]
     # azim_list = [t*np.pi for t in (0, 1, 5/3, 1/3, 1, 4/3, 2/3, 0, )]
     elev_list = [t*np.pi for t in (1/3, 1/4, 1/4, 1/4, 1/4, 1/3, )]
-    azim_list = [t*np.pi for t in (1, 4/3, 2/3, 5/3, 1/3, 0, )]
+    azim_list = [t*np.pi for t in (0, 4/3, 2/3, 5/3, 1/3, 0, )]
     # elev_list = [t*np.pi for t in (1/3,)]
     # azim_list = [t*np.pi for t in (0,)]
 
@@ -218,10 +219,15 @@ def main(cfg):
         last_texture = tar_uv_model.get_texture().detach().clone()
         save_image(last_texture, ".cache/last_texture.png")
 
+        time_start = time.time() #开始计时
         target = sde(model, ref_image, tar_image, control, cfg.model.num_step, cfg.strength, render_size).detach().cpu().to("cuda:1")
+        time_c= time.time()  - time_start   #运行所花时间
+        print('sde time cost', time_c, 's')
+
         save_image(target, ".cache/target.png")
 
         scheduler=torch.optim.lr_scheduler.MultiStepLR(optim_texture, milestones=[400, 600, 700], gamma=0.5)
+        time_start = time.time() #开始计时
         for i in range(800):
             optim_texture.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
@@ -239,8 +245,8 @@ def main(cfg):
             scaler.step(optim_texture)
             scaler.update()
             scheduler.step()
-
-        print()
+        time_c= time.time()  - time_start   #运行所花时间
+        print('texture project time cost', time_c, 's')
         save_image(texture_out["image"], ".cache/mesa_res.png")
         save_image(tar_uv_model.texture_map, ".cache/texture.png")
 

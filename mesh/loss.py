@@ -59,12 +59,16 @@ class Normalization(nn.Module):
 
 
 class Losser(nn.Module):
-    def __init__(self, style_img, content_img, device="cuda"):
+    def __init__(self, style_img, content_img, cnn=None, device="cuda"):
         super(Losser, self).__init__()
-        self.content_layers = ['conv_4']
+        # self.content_layers = ['conv_4']
+        self.content_layers = []
         self.style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 
-        self.cnn = vgg19().to(device).features.eval()
+        if cnn is not None:
+            self.cnn = cnn
+        else:
+            self.cnn = vgg19().to(device).features.eval()
         self.normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
         self.normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
 
@@ -129,7 +133,7 @@ class Losser(nn.Module):
         return model, style_losses, content_losses
 
 
-    def get_loss(self, input_img, style_weight=1000000, content_weight=1):
+    def get_loss(self, input_img, style_weight=1, content_weight=1):
         self.model(input_img)
         style_score = 0
         content_score = 0
